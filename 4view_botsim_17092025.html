@@ -45,16 +45,16 @@
     <header><h2>Control Panel</h2></header>
     <div class="inner">
       <div class="btns">
-        <button class="pill" id="btnStart">▶ Start</button>
-        <button class="pill" id="btnPause">⏸ Pause</button>
-        <button class="pill" id="btnReset">⟲ Reset</button>
-        <button class="pill" id="btnMode">↔ Mode: 3D Grid</button>
-        <button class="pill" id="btnNewGoal">🎯 New Goal</button>
-        <button class="pill" id="btnClearTrails">🧹 Clear Trails</button>
-        <button class="pill" id="btnWireTop">☰ Wire: Top</button>
-        <button class="pill" id="btnWireSide">☰ Wire: Side</button>
-        <button class="pill" id="btnWireIso">☰ Wire: Iso</button>
-        <button class="pill" id="btnTogglePaths">• Path Overlay</button>
+        <button class="pill" id="btnStart">Start</button>
+        <button class="pill" id="btnPause">Pause</button>
+        <button class="pill" id="btnReset">Reset</button>
+        <button class="pill" id="btnMode">Mode: 3D Grid</button>
+        <button class="pill" id="btnNewGoal">New Goal</button>
+        <button class="pill" id="btnClearTrails">Clear Trails</button>
+        <button class="pill" id="btnWireTop">Wire: Top</button>
+        <button class="pill" id="btnWireSide">Wire: Side</button>
+        <button class="pill" id="btnWireIso">Wire: Iso</button>
+        <button class="pill" id="btnTogglePaths">Path Overlay</button>
       </div>
 
       <label>Time scale</label>
@@ -138,9 +138,9 @@ camera.zoom4=1.0
 camera.top.zoom=1.0 camera.side.zoom=1.0 camera.iso.zoom=1.0</textarea>
       <div class="btns">
         <button class="pill" id="btnApplyDSL">Apply DSL</button>
-        <button class="pill" id="btnExportTop">⬇ Export Top (2×)</button>
-        <button class="pill" id="btnExportSide">⬇ Export Side (2×)</button>
-        <button class="pill" id="btnExportIso">⬇ Export Iso (2×)</button>
+        <button class="pill" id="btnExportTop">Export Top (2×)</button>
+        <button class="pill" id="btnExportSide">Export Side (2×)</button>
+        <button class="pill" id="btnExportIso">Export Iso (2×)</button>
       </div>
     </div>
   </section>
@@ -812,7 +812,7 @@ camera.top.zoom=1.0 camera.side.zoom=1.0 camera.iso.zoom=1.0</textarea>
     const kv={};
     for(const t of tokens){ const m=t.match(/^([^=]+)=(.+)$/); if(m) kv[m[1].trim()]=m[2].trim(); }
     if(kv['seed']) seedInputEl.value=kv['seed'];
-    if(kv['mode']) { mode = (kv['mode'].toLowerCase()==='2d')?MODE_2D:MODE_3D; btnMode.textContent = '↔ Mode: ' + (mode===MODE_2D?'2D Top-Down':'3D Grid'); }
+    if(kv['mode']) { mode = (kv['mode'].toLowerCase()==='2d')?MODE_2D:MODE_3D; btnMode.textContent = 'Mode: ' + (mode===MODE_2D?'2D Top-Down':'3D Grid'); }
     if(kv['bots.orange']) orangeCountEl.value = String(Math.max(0, Math.min(200, parseInt(kv['bots.orange'],10)||0)));
     if(kv['bots.green'])  greenCountEl.value  = String(Math.max(0, Math.min(200, parseInt(kv['bots.green'],10)||0)));
     if(kv['goals.policy']){ const v=kv['goals.policy']; goalPolicyEl.value=(v==='team'?'team':'random'); goalPolicy=goalPolicyEl.value; }
@@ -842,7 +842,7 @@ camera.top.zoom=1.0 camera.side.zoom=1.0 camera.iso.zoom=1.0</textarea>
   btnTogglePaths.onclick=()=>{ showPaths=!showPaths; btnTogglePaths.dataset.on=showPaths?'1':''; };
   btnMode.onclick=()=>{
     mode = (mode===MODE_3D)?MODE_2D:MODE_3D;
-    btnMode.textContent = '↔ Mode: ' + (mode===MODE_2D?'2D Top-Down':'3D Grid');
+    btnMode.textContent = 'Mode: ' + (mode===MODE_2D?'2D Top-Down':'3D Grid');
     if(mode===MODE_2D){ for(const b of bots){ b.z=0; } goalState.current.z=0; }
     setNewGoal(); setPathsForAll(); clearTrails();
   };
