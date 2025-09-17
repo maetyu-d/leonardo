@@ -670,7 +670,7 @@ camera.top.zoom=1.0 camera.side.zoom=1.0 camera.iso.zoom=1.0</textarea>
   }
 
   // ----- 4th View with aligned + smoothed trail/bot rendering -----
-  const zoomTrail = (() => zoomTrail)(); // keep handle above; no-op, ensures scope
+
   function drawTopZoom(){
     const g=bots.find(b=>b.kind==='green')||bots[0]; const W=cvTopZoom.width,H=cvTopZoom.height; ctxTopZoom.clearRect(0,0,W,H); if(!g) return;
 
