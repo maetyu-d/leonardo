@@ -24,7 +24,7 @@
   .pill[data-on="1"]{background:linear-gradient(180deg,#13202c,#0b1520);border-color:#223546;box-shadow:inset 0 0 0 1px #2a4358}
   .row{display:grid;grid-template-columns:1fr 1fr;gap:8px}
   label{display:block;font-size:12px;color:#a8b6c6;margin:8px 0 6px}
-  input[type="number"], input[type="text"], select, textarea{ width:100%;padding:8px 10px;border-radius:10px;border:1px solid #1b2633;background:#0b0f14;color:var(--ui);font-size:13px;box-sizing:border-box }
+  input[type="number"], input[type="text"], select, textarea{ width:100%;padding:8px 10px;border-radius:10px;border:1px solid #1b2633;background:#0b0f14;color:#e7edf4;font-size:13px;box-sizing:border-box }
   input[type="range"]{width:100%}
   textarea{min-height:120px;max-height:220px;font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace}
   .mini{font-size:11px;color:#92a3b7}
@@ -100,7 +100,10 @@
           <label>Zoom (fourth view) <span class="mini">(<span id="lblZoom">1.0×</span>)</span></label>
           <input type="range" id="sZoom" min="0.5" max="4" step="0.1" value="1.0" />
         </div>
-        <div></div>
+        <div>
+          <label>Export scale <span class="mini">(<span id="lblExportScale">4×</span>)</span></label>
+          <input type="range" id="sExportScale" min="2" max="10" step="1" value="4" />
+        </div>
       </div>
 
       <div class="row" style="margin-top:10px">
@@ -135,13 +138,14 @@ goals.policy=random
 orange.speed=1.0
 green.speed=0.9 green.bias=0.25 green.wobble=0.35 green.fatigue=0.004 green.jitter=0.3
 camera.zoom4=1.0
-camera.top.zoom=1.0 camera.side.zoom=1.0 camera.iso.zoom=1.0</textarea>
+camera.top.zoom=1.0 camera.side.zoom=1.0 camera.iso.zoom=1.0
+export.scale=4</textarea>
       <div class="btns">
         <button class="pill" id="btnApplyDSL">Apply DSL</button>
-        <button class="pill" id="btnExportTop">Export Top (Trails only, 4×)</button>
-        <button class="pill" id="btnExportSide">Export Side (4×)</button>
-        <button class="pill" id="btnExportIso">Export Iso (Trails+Wireframe, 4×)</button>
-        <button class="pill" id="btnExportZoom">Export Zoomed (Everything, 4×)</button>
+        <button class="pill" id="btnExportTop">Export Top (Trails only)</button>
+        <button class="pill" id="btnExportSide">Export Side</button>
+        <button class="pill" id="btnExportIso">Export Iso (Trails+Wireframe)</button>
+        <button class="pill" id="btnExportZoom">Export Zoomed (Everything)</button>
       </div>
     </div>
   </section>
@@ -192,8 +196,8 @@ camera.top.zoom=1.0 camera.side.zoom=1.0 camera.iso.zoom=1.0</textarea>
   const btnApplyDSL=$('btnApplyDSL'), dslEl=$('dsl'), btnMode=$('btnMode');
   const orangeCountEl=$('orangeCount'), greenCountEl=$('greenCount'), goalPolicyEl=$('goalPolicy'), seedInputEl=$('seedInput');
   const biasLeftEl=$('biasLeft'), wobbleEl=$('wobble'), fatigueRateEl=$('fatigueRate'), speedJitterEl=$('speedJitter');
-  const sZoom=$('sZoom'), sZoomTop=$('sZoomTop'), sZoomSide=$('sZoomSide'), sZoomIso=$('sZoomIso');
-  const lblZoom=$('lblZoom'), lblZoomTop=$('lblZoomTop'), lblZoomSide=$('lblZoomSide'), lblZoomIso=$('lblZoomIso');
+  const sZoom=$('sZoom'), sZoomTop=$('sZoomTop'), sZoomSide=$('sZoomSide'), sZoomIso=$('sZoomIso'), sExportScale=$('sExportScale');
+  const lblZoom=$('lblZoom'), lblZoomTop=$('lblZoomTop'), lblZoomSide=$('lblZoomSide'), lblZoomIso=$('lblZoomIso'), lblExportScale=$('lblExportScale');
   const timeScaleButtons=Array.from(document.querySelectorAll('[data-scale]'));
   const statBox=$('statBox');
 
@@ -207,6 +211,8 @@ camera.top.zoom=1.0 camera.side.zoom=1.0 camera.iso.zoom=1.0</textarea>
   let camX=SIZE/2, camY=SIZE/2, camZ=0, followSpeed=12.0, zoomScale=1.0, VIEW_BASE_TILES=16;
   // Per-view zooms
   let zoomTop=1.0, zoomSide=1.0, zoomIso=1.0;
+  // Export scale (slider & DSL)
+  let exportScale=4; // 2..10
   // Counters
   let greenAscents=0, greenDescents=0;
   // View-only render dt for smoothing
@@ -534,11 +540,14 @@ camera.top.zoom=1.0 camera.side.zoom=1.0 camera.iso.zoom=1.0</textarea>
   // ---------- Goal Renewal ----------
   function setPathsForAll(){ for(const x of bots){ x.reached=false; x.path=findPath(x,{x:Math.round(x.x),y:Math.round(x.y),z:(mode===MODE_2D?0:Math.round(x.z))},goalState.current); x.pathIndex=0; } }
   function maybeRenewGoal(){
-    if(goalPolicy==='random'){
-      for(const b of bots){ if(b.reached){ setNewGoal(); setPathsForAll(); break; } }
+    if (goalPolicy === 'random') {
+      for (const b of bots) {
+        if (b.reached) { setNewGoal(); setPathsForAll(); break; }
+      }
     } else {
-      const allReached=bots.length>0 && bots.every(b=>b.reached);
-      if(allReached){ setNewGoal(); setPathsForAll(); }
+      const haveBots = bots.length > 0;
+      const allReached = haveBots && bots.every(b => b.reached);
+      if (allReached) { setNewGoal(); setPathsForAll(); }
     }
   }
 
@@ -801,7 +810,7 @@ camera.top.zoom=1.0 camera.side.zoom=1.0 camera.iso.zoom=1.0</textarea>
   }
 
   // ---------- Export (Hi-Res, Crisp) ----------
-  function exportCanvasCrisp(canvas,name,scale=4){
+  function exportCanvasCrisp(canvas,name,scale){
     const out=document.createElement('canvas');
     out.width=canvas.width*scale; out.height=canvas.height*scale;
     const o=out.getContext('2d');
@@ -809,11 +818,11 @@ camera.top.zoom=1.0 camera.side.zoom=1.0 camera.iso.zoom=1.0</textarea>
     o.setTransform(scale,0,0,scale,0,0);
     o.drawImage(canvas,0,0);
     const url=out.toDataURL('image/png');
-    const a=document.createElement('a'); a.href=url; a.download=name+'.png'; a.click();
+    const a=document.createElement('a'); a.href=url; a.download=name+`_${scale}x.png`; a.click();
   }
 
-  // New: export *source* canvas (e.g., trails-only or composite) at 4× crisp
-  function exportSourceCanvasCrisp(sourceCanvas, name, scale=4){
+  // Export a source canvas (like trails-only or composed iso)
+  function exportSourceCanvasCrisp(sourceCanvas, name, scale){
     const out=document.createElement('canvas');
     out.width=sourceCanvas.width*scale; out.height=sourceCanvas.height*scale;
     const o=out.getContext('2d');
@@ -821,7 +830,7 @@ camera.top.zoom=1.0 camera.side.zoom=1.0 camera.iso.zoom=1.0</textarea>
     o.setTransform(scale,0,0,scale,0,0);
     o.drawImage(sourceCanvas,0,0);
     const url=out.toDataURL('image/png');
-    const a=document.createElement('a'); a.href=url; a.download=name+'.png'; a.click();
+    const a=document.createElement('a'); a.href=url; a.download=name+`_${scale}x.png`; a.click();
   }
 
   // Compose iso export: trails + wireframe, independent of UI toggle
@@ -855,6 +864,10 @@ camera.top.zoom=1.0 camera.side.zoom=1.0 camera.iso.zoom=1.0</textarea>
     if(kv['camera.top.zoom']) { const v=parseFloat(kv['camera.top.zoom']);  if(Number.isFinite(v)&&v>0){ zoomTop = v; sZoomTop.value=String(v); lblZoomTop.textContent=v.toFixed(1)+'×'; } }
     if(kv['camera.side.zoom']){ const v=parseFloat(kv['camera.side.zoom']); if(Number.isFinite(v)&&v>0){ zoomSide= v; sZoomSide.value=String(v); lblZoomSide.textContent=v.toFixed(1)+'×'; } }
     if(kv['camera.iso.zoom']) { const v=parseFloat(kv['camera.iso.zoom']);  if(Number.isFinite(v)&&v>0){ zoomIso = v; sZoomIso.value=String(v); lblZoomIso.textContent=v.toFixed(1)+'×'; } }
+    if(kv['export.scale']) { 
+      const v=Math.round(Math.max(2, Math.min(10, parseFloat(kv['export.scale']))));
+      exportScale = v; sExportScale.value=String(v); lblExportScale.textContent = `${v}×`;
+    }
 
     reseed(seedInputEl.value||'ark100'); genWorld(); setNewGoal(); initBots(); clearTrails();
   }
@@ -875,19 +888,35 @@ camera.top.zoom=1.0 camera.side.zoom=1.0 camera.iso.zoom=1.0</textarea>
     if(mode===MODE_2D){ for(const b of bots){ b.z=0; } goalState.current.z=0; }
     setNewGoal(); setPathsForAll(); clearTrails();
   };
-  // Export wiring (per your spec)
-  btnExportTop.onclick  =()=> exportSourceCanvasCrisp(trailTop,  'top_trails_only', 4);                 // trails only
-  btnExportSide.onclick =()=> exportCanvasCrisp(cvSide,         'side',             4);                 // unchanged
-  btnExportIso.onclick  =()=> exportSourceCanvasCrisp(makeIsoTrailsPlusWireframe(), 'iso_trails_wire', 4); // trails + wireframe
-  btnExportZoom.onclick =()=> exportCanvasCrisp(cvTopZoom,      'zoom_everything',  4);                 // everything visible
+
+  // NEW: Goal policy dropdown live hook
+  goalPolicyEl.onchange = () => {
+    goalPolicy = goalPolicyEl.value;   // 'random' | 'team'
+    setNewGoal();
+    setPathsForAll();
+  };
+
+  // NEW: Seed input applies immediately on change
+  seedInputEl.addEventListener('change', () => {
+    reseed(seedInputEl.value || 'ark100');
+    genWorld(); setNewGoal(); initBots(); clearTrails();
+  });
+
+  // Export wiring (uses exportScale from slider/DSL)
+  btnExportTop.onclick  =()=> exportSourceCanvasCrisp(trailTop,  'top_trails_only',    exportScale);
+  btnExportSide.onclick =()=> exportCanvasCrisp     (cvSide,     'side',               exportScale);
+  btnExportIso.onclick  =()=> exportSourceCanvasCrisp(makeIsoTrailsPlusWireframe(), 'iso_trails_wire', exportScale);
+  btnExportZoom.onclick =()=> exportCanvasCrisp     (cvTopZoom,  'zoom_everything',    exportScale);
+
   btnApplyDSL.onclick   =()=> applyDSL(dslEl.value);
   timeScaleButtons.forEach(btn=>{ btn.onclick=()=>{ timeScaleButtons.forEach(b=>b.dataset.on=''); btn.dataset.on='1'; timeScale=parseInt(btn.dataset.scale,10)||1; }; });
 
   const fmt=n=>(+n).toFixed(1);
-  sZoom.oninput  =()=>{ zoomScale =parseFloat(sZoom.value); lblZoom.textContent=fmt(zoomScale)+'×'; };
-  sZoomTop.oninput =()=>{ zoomTop = parseFloat(sZoomTop.value); lblZoomTop.textContent = fmt(zoomTop)+'×'; };
-  sZoomSide.oninput=()=>{ zoomSide= parseFloat(sZoomSide.value); lblZoomSide.textContent=fmt(zoomSide)+'×'; };
-  sZoomIso.oninput =()=>{ zoomIso = parseFloat(sZoomIso.value); lblZoomIso.textContent=fmt(zoomIso)+'×'; };
+  sZoom.oninput     =()=>{ zoomScale =parseFloat(sZoom.value); lblZoom.textContent=fmt(zoomScale)+'×'; };
+  sZoomTop.oninput  =()=>{ zoomTop = parseFloat(sZoomTop.value); lblZoomTop.textContent = fmt(zoomTop)+'×'; };
+  sZoomSide.oninput =()=>{ zoomSide= parseFloat(sZoomSide.value); lblZoomSide.textContent=fmt(zoomSide)+'×'; };
+  sZoomIso.oninput  =()=>{ zoomIso = parseFloat(sZoomIso.value); lblZoomIso.textContent=fmt(zoomIso)+'×'; };
+  sExportScale.oninput=()=>{ exportScale = Math.round(parseFloat(sExportScale.value)); lblExportScale.textContent = `${exportScale}×`; };
 
   // ---------- Loop ----------
   function render(){ drawTop(); drawSide(); drawIso(); drawTopZoom(); }
@@ -906,9 +935,10 @@ camera.top.zoom=1.0 camera.side.zoom=1.0 camera.iso.zoom=1.0</textarea>
   }
 
   // ---------- Boot ----------
+  // Initialize label for export scale
+  lblExportScale.textContent = `${exportScale}×`;
   reseed(seedInputEl.value||'ark100'); genWorld(); setNewGoal(); initBots(); render(); requestAnimationFrame(step);
 })();
 </script>
 </body>
 </html>
-
