@@ -1,0 +1,615 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>100×100×100 Grid Bot Sim — Streamlined</title>
+<style>
+  :root{ --bg:#0b0d10;--panel:#11151a;--panel2:#0f1318;--ink:#e7edf4;--mut:#9fb0c0; }
+  html,body{height:100%}
+  body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,Noto Sans,sans-serif;background:linear-gradient(180deg,var(--bg),#090b0e 40%);color:var(--ink)}
+  header{padding:12px 18px;border-bottom:1px solid #1a212b;background:linear-gradient(180deg,#0e1217,#0a0d11);position:sticky;top:0;z-index:10}
+  header h1{font-size:16px;margin:0;font-weight:600;letter-spacing:.2px}
+  .wrap{display:grid;grid-template-columns:360px 1fr;gap:14px;padding:14px}
+  .panel{background:#11151a;border:1px solid #18202a;border-radius:14px;box-shadow:0 10px 30px rgba(0,0,0,.35);overflow:hidden}
+  .panel header{background:#0f1318;border:0;padding:10px 14px}
+  .panel header h2{margin:0;font-size:13px;opacity:.9}
+  .panel .inner{padding:12px 14px}
+  .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+  .fullrow{margin-top:12px}
+  canvas{width:100%;height:320px;background:#0b0f14;border-radius:12px;border:1px solid #16202a;display:block}
+  #cvTopZoom{height:480px}
+  .controls label{display:block;font-size:12px;color:var(--mut);margin:10px 0 6px}
+  .controls input[type="number"], .controls input[type="text"], .controls select, .controls button, .controls textarea, .controls input[type="range"]{width:100%;padding:8px 10px;border-radius:10px;border:1px solid #1b2633;background:#0b0f14;color:var(--ink);font-size:13px;box-sizing:border-box}
+  .row{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .btns{display:flex;gap:8px;flex-wrap:wrap}
+  .pill{padding:6px 10px;border-radius:999px;border:1px solid #1b2633;background:#0b0f14;color:var(--ink);font-size:12px;cursor:pointer}
+  .pill[data-on="1"]{background:linear-gradient(180deg,#13202c,#0b1520);border-color:#223546;box-shadow:inset 0 0 0 1px #2a4358}
+  .mini{font-size:11px;color:var(--mut)}
+  .legend{display:flex;gap:8px;font-size:12px;color:var(--mut);align-items:center}
+  .dot{width:10px;height:10px;border-radius:50%}
+  .dot.orange{background:#ffa726}
+  .dot.green{background:#20e37a}
+  .stat{font-size:12px;color:#b9c6d3;border:1px solid #1b2633;background:#0b0f14;border-radius:10px;padding:8px 10px;margin-top:10px}
+</style>
+</head>
+<body>
+<header><h1>100×100×100 Cube World — Streamlined · 3 Views + Zoom · Trails · Paths · DSL</h1></header>
+<div class="wrap">
+  <section class="panel controls">
+    <header><h2>Control Panel</h2></header>
+    <div class="inner">
+      <div class="btns">
+        <button class="pill" id="btnStart">Start</button>
+        <button class="pill" id="btnPause">Pause</button>
+        <button class="pill" id="btnReset">Reset</button>
+        <button class="pill" id="btnMode">Mode: 3D Grid</button>
+        <button class="pill" id="btnNewGoal">New Goal</button>
+        <button class="pill" id="btnClearTrails">Clear Trails</button>
+      </div>
+
+      <label>Time scale</label>
+      <div class="btns">
+        <button class="pill" data-scale="1">1×</button>
+        <button class="pill" data-scale="5">5×</button>
+        <button class="pill" data-scale="10">10×</button>
+      </div>
+
+      <div class="btns">
+        <button class="pill" id="btnWireTop">Wire: Top</button>
+        <button class="pill" id="btnWireSide">Wire: Side</button>
+        <button class="pill" id="btnWireIso">Wire: Iso</button>
+        <button class="pill" id="btnTogglePaths">Path Overlay</button>
+      </div>
+
+      <div class="row">
+        <div><label>Orange bots</label><input type="number" id="orangeCount" min="0" max="200" value="12"></div>
+        <div><label>Green bots</label><input type="number" id="greenCount" min="0" max="200" value="12"></div>
+      </div>
+
+      <div class="row">
+        <div>
+          <label>Goal policy</label>
+          <select id="goalPolicy">
+            <option value="random">Randomized (any bot)</option>
+            <option value="team">Team completion (all bots)</option>
+          </select>
+        </div>
+        <div><label>Seed</label><input type="text" id="seedInput" value="ark100"></div>
+      </div>
+
+      <details>
+        <summary class="mini">Green gait & constraints</summary>
+        <div class="row">
+          <div><label>Left-turn bias (0–1)</label><input type="number" id="biasLeft" step="0.05" min="0" max="1" value="0.25"></div>
+          <div><label>Lateral wobble (0–1)</label><input type="number" id="wobble" step="0.05" min="0" max="1" value="0.35"></div>
+        </div>
+        <div class="row">
+          <div>
+            <label>Green fatigue rate (per s) <span class="mini">(<span id="lblFatigueGreen">0.0040</span>)</span></label>
+            <input type="range" id="sFatigueGreen" min="0" max="0.02" step="0.0005" value="0.004">
+          </div>
+          <div>
+            <label>Orange fatigue rate <span class="mini">(<span id="lblFatigueOrange">linked</span>)</span></label>
+            <input type="text" id="fatigueOrangeDisplay" value="linked" readonly>
+          </div>
+        </div>
+        <div class="row">
+          <div><label>Speed jitter (0–1)</label><input type="number" id="speedJitter" step="0.05" min="0" max="1" value="0.3"></div>
+          <div></div>
+        </div>
+      </details>
+
+      <div class="row" style="margin-top:10px">
+        <div><label>Zoom (fourth view) <span class="mini">(<span id="lblZoom">1.0×</span>)</span></label><input type="range" id="sZoom" min="0.5" max="4" step="0.1" value="1.0"></div>
+        <div><label>Export scale <span class="mini">(<span id="lblExportScale">4×</span>)</span></label><input type="range" id="sExportScale" min="2" max="10" step="1" value="4"></div>
+      </div>
+
+      <div class="row">
+        <div><label>Top zoom <span class="mini">(<span id="lblZoomTop">1.0×</span>)</span></label><input type="range" id="sZoomTop"  min="0.5" max="3" step="0.1" value="1.0"></div>
+        <div><label>Side zoom <span class="mini">(<span id="lblZoomSide">1.0×</span>)</span></label><input type="range" id="sZoomSide" min="0.5" max="3" step="0.1" value="1.0"></div>
+      </div>
+      <div class="row" style="margin-top:6px">
+        <div><label>Iso zoom <span class="mini">(<span id="lblZoomIso">1.0×</span>)</span></label><input type="range" id="sZoomIso" min="0.5" max="3" step="0.1" value="1.0"></div>
+        <div><label>Wireframe visibility <span class="mini">(<span id="lblWireVis">1.0×</span>)</span></label><input type="range" id="sWireVis" min="1" max="6" step="0.1" value="1"></div>
+      </div>
+
+      <div class="legend"><span class="dot orange"></span> Orange = shortest paths (ramps or stairs)</div>
+      <div class="legend"><span class="dot green"></span> Green = ramps-only ascents + gait bias</div>
+
+      <div class="stat" id="statBox">Green ascents: 0 · descents: 0</div>
+
+      <label style="margin-top:12px">DSL</label>
+      <textarea id="dsl" spellcheck="false">seed=ark100
+mode=3d
+world.size=100
+bots.orange=12 bots.green=12
+goals.policy=random
+orange.speed=1.0
+green.speed=0.9 green.bias=0.25 green.wobble=0.35 green.fatigue=0.004 green.jitter=0.3
+camera.zoom4=1.0
+camera.top.zoom=1.0 camera.side.zoom=1.0 camera.iso.zoom=1.0
+export.scale=4
+wire.visibility=1.0</textarea>
+
+      <div class="btns" style="margin-top:8px">
+        <button class="pill" id="btnApplyDSL">Apply DSL</button>
+        <button class="pill" id="btnExportTop">Export Top (Trails)</button>
+        <button class="pill" id="btnExportSide">Export Side</button>
+        <button class="pill" id="btnExportIso">Export Iso (Trails+Wire)</button>
+        <button class="pill" id="btnExportZoom">Export Zoomed (Everything)</button>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel">
+    <header><h2>Views</h2></header>
+    <div class="inner">
+      <div class="grid">
+        <div><canvas id="cvTop"  width="720" height="720"></canvas><div class="mini">Top-down (x,y), z collapsed.</div></div>
+        <div><canvas id="cvSide" width="720" height="360"></canvas><div class="mini">Side-on (x,z), y collapsed.</div></div>
+        <div><canvas id="cvIso"  width="720" height="540"></canvas><div class="mini">Isometric with Z-slice wire.</div></div>
+      </div>
+      <div class="fullrow">
+        <canvas id="cvTopZoom" width="1440" height="480"></canvas>
+        <div class="mini">Zoomed top-down following the first green bot (stiffness 12.0). Fatigue% label on focused bot.</div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<script>
+(() => {
+  // ====== Constants & DOM ======
+  const SIZE=100, WORLD_H=100, MODE_3D='3d', MODE_2D='2d';
+  const COL_ORANGE="#ffa726", COL_GREEN="#20e37a", COL_GOAL="#ffd54f";
+  const $=id=>document.getElementById(id);
+  const cvTop=$('cvTop'), cvSide=$('cvSide'), cvIso=$('cvIso'), cvTopZoom=$('cvTopZoom');
+  const tTop=cvTop.getContext('2d'), tSide=cvSide.getContext('2d'), tIso=cvIso.getContext('2d'), tZoom=cvTopZoom.getContext('2d');
+  const btnStart=$('btnStart'), btnPause=$('btnPause'), btnReset=$('btnReset'), btnMode=$('btnMode'), btnNewGoal=$('btnNewGoal'), btnClearTrails=$('btnClearTrails');
+  const btnWireTop=$('btnWireTop'), btnWireSide=$('btnWireSide'), btnWireIso=$('btnWireIso'), btnTogglePaths=$('btnTogglePaths');
+  const btnExportTop=$('btnExportTop'), btnExportSide=$('btnExportSide'), btnExportIso=$('btnExportIso'), btnExportZoom=$('btnExportZoom'), btnApplyDSL=$('btnApplyDSL');
+  const orangeCountEl=$('orangeCount'), greenCountEl=$('greenCount'), goalPolicyEl=$('goalPolicy'), seedInputEl=$('seedInput');
+  const biasLeftEl=$('biasLeft'), wobbleEl=$('wobble'), speedJitterEl=$('speedJitter');
+  const sZoom=$('sZoom'), sZoomTop=$('sZoomTop'), sZoomSide=$('sZoomSide'), sZoomIso=$('sZoomIso'), sExportScale=$('sExportScale');
+  const lblZoom=$('lblZoom'), lblZoomTop=$('lblZoomTop'), lblZoomSide=$('lblZoomSide'), lblZoomIso=$('lblZoomIso'), lblExportScale=$('lblExportScale');
+  const sFatigueGreen=$('sFatigueGreen'), lblFatigueGreen=$('lblFatigueGreen'), lblFatigueOrange=$('lblFatigueOrange'), fatigueOrangeDisplay=$('fatigueOrangeDisplay');
+  const sWireVis=$('sWireVis'), lblWireVis=$('lblWireVis');
+  const statBox=$('statBox');
+  const timeScaleButtons=[...document.querySelectorAll('[data-scale]')];
+
+  // ====== State ======
+  let mode=MODE_3D, running=true, timeScale=1, tPrev=0;
+  let showWireTop=false, showWireSide=false, showWireIso=false, showPaths=false;
+  let orangeSpeed=1.0, greenSpeed=0.9, goalPolicy='random';
+  let greenFatigueRate=0.004, orangeFatigueRate=null, orangeFatigueFactor=0.5;
+  let seed='ark100', rng=mulberry32(hashStr(seed));
+  let zoomScale=1.0, zoomTop=1.0, zoomSide=1.0, zoomIso=1.0, wireVis=1.0, exportScale=4;
+  let camX=SIZE/2, camY=SIZE/2, camZ=0, followSpeed=12.0; // fixed stiffness
+  const VIEW_BASE_TILES=16;
+  let greenAscents=0, greenDescents=0, renderDt=0;
+
+  // ====== World ======
+  const world={ size:SIZE, floors:new Float32Array(SIZE*SIZE*WORLD_H), access:new Uint8Array(SIZE*SIZE*WORLD_H), stairs:new Uint8Array(WORLD_H*4), ramps:new Uint8Array(WORLD_H*4) };
+  const IDX=(x,y,z)=> z*SIZE*SIZE + y*SIZE + x;
+  const cornerXY=c=> c===0?{x:0,y:0}:c===1?{x:SIZE-1,y:0}:c===2?{x:0,y:SIZE-1}:{x:SIZE-1,y:SIZE-1};
+  const isStair=(x,y,z)=>{ for(let c=0;c<4;c++){ if(world.stairs[z*4+c]){ const p=cornerXY(c); if(p.x===x&&p.y===y) return true; } } return false; };
+  const isRamp =(x,y,z)=>{ for(let c=0;c<4;c++){ if(world.ramps [z*4+c]){ const p=cornerXY(c); if(p.x===x&&p.y===y) return true; } } return false; };
+
+  // ====== RNG & Noise ======
+  function hashStr(s){ let h=1779033703 ^ s.length; for(let i=0;i<s.length;i++){ h=Math.imul(h ^ s.charCodeAt(i),3432918353); h=(h<<13)|(h>>>19);} return (h>>>0); }
+  function mulberry32(a){ return ()=>{ let t=a+=0x6D2B79F5; t=Math.imul(t^(t>>>15),t|1); t^=t+Math.imul(t^(t>>>7),t|61); return ((t^(t>>>14))>>>0)/4294967296; }; }
+  function fade(t){ return t*t*(3-2*t); }
+  function h3(i,j,k){ let h=2166136261; h=Math.imul(h^i,16777619); h=Math.imul(h^j,16777619); h=Math.imul(h^k,16777619); h^=(h>>>13); return (h>>>0)/4294967295; }
+  function noise3(x,y,z){ const xi=~~x, yi=~~y, zi=~~z, xf=x-xi, yf=y-yi, zf=z-zi, u=fade(xf), v=fade(yf), w=fade(zf), L=(a,b,t)=>a+(b-a)*t;
+    const c000=h3(xi,yi,zi),c100=h3(xi+1,yi,zi),c010=h3(xi,yi+1,zi),c110=h3(xi+1,yi+1,zi),c001=h3(xi,yi,zi+1),c101=h3(xi+1,yi,zi+1),c011=h3(xi,yi+1,zi+1),c111=h3(xi+1,yi+1,zi+1);
+    const x00=L(c000,c100,u),x10=L(c010,c110,u),x01=L(c001,c101,u),x11=L(c011,c111,u); return L(L(x00,x10,v),L(x01,x11,v),w);
+  }
+  const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
+  const lerp=(a,b,t)=>a+(b-a)*t;
+
+  function reseed(s){ seed=s; rng=mulberry32(hashStr(seed)); }
+
+  function genWorld(){
+    const sc=0.12;
+    for(let z=0;z<WORLD_H;z++){
+      for(let y=0;y<SIZE;y++){
+        for(let x=0;x<SIZE;x++){
+          const n=0.4*noise3(x*sc,y*sc,z*sc)+0.3*noise3(x*sc*2,y*sc*2,z*sc*2)+0.3*noise3(x*sc*4+13.7,y*sc*4+7.3,z*sc*4+2.5);
+          const noisy=clamp(n,0,1);
+          world.floors[IDX(x,y,z)]=noisy;
+          world.access[IDX(x,y,z)]=Math.round((1-noisy)*10);
+        }
+      }
+      const c=[0,1,2,3]; for(let i=c.length-1;i>0;i--){ const j=(rng()*(i+1))|0; [c[i],c[j]]=[c[j],c[i]]; }
+      for(let k=0;k<4;k++){ world.stairs[z*4+k]=0; world.ramps[z*4+k]=0; }
+      world.stairs[z*4+c[0]]=1; world.ramps[z*4+c[1]]=1;
+    }
+  }
+
+  // ====== Goals ======
+  const goalState={ current:{x:50,y:50,z:50}, reachedBy:new Set() };
+  const rnd3 =()=>({x:(rng()*SIZE)|0,y:(rng()*SIZE)|0,z:(rng()*WORLD_H)|0});
+  const rnd2 =()=>({x:(rng()*SIZE)|0,y:(rng()*SIZE)|0,z:0});
+  function newGoal(){ goalState.current=(mode===MODE_2D)?rnd2():rnd3(); goalState.reachedBy.clear(); }
+
+  // ====== Bots & Paths ======
+  const bots=[];
+  function mkBot(kind){
+    const x=(rng()*SIZE)|0, y=(rng()*SIZE)|0, z=(mode===MODE_2D?0:(rng()*WORLD_H)|0);
+    return {kind,x,y,z,path:[],pathIndex:0,reached:false,vx:0,vy:0,vz:0,speedBase:(kind==='orange'?orangeSpeed:greenSpeed),speedSmoothed:(kind==='orange'?orangeSpeed:greenSpeed),fatigue:0,lastDir:{dx:1,dy:0,dz:0},_zpx:null,_zpy:null,_gaitT:0,_wphase:rng()*6.28,_jphase:rng()*6.28,_elevType:null,_elevTime:0,_stuckT:0,_lastPX:x,_lastPY:y,_lastPZ:z};
+  }
+  const firstGreen=()=>bots.find(b=>b.kind==='green')||bots[0];
+
+  const DIR3=[[1,0,0],[-1,0,0],[0,1,0],[0,-1,0],[0,0,1],[0,0,-1]];
+  const H3 =(a,b)=>Math.abs(a.x-b.x)+Math.abs(a.y-b.y)+Math.abs(a.z-b.z);
+  function canMove3(b,x,y,z,nx,ny,nz){
+    if(nx<0||ny<0||nz<0||nx>=SIZE||ny>=SIZE||nz>=WORLD_H) return false;
+    const dz=nz-z;
+    if(dz=== 1){ const s=isStair(x,y,z), r=isRamp(x,y,z); return b.kind==='green' ? r : (s||r); }
+    if(dz===-1){ return isStair(nx,ny,nz) || isRamp(nx,ny,nz); }
+    return true;
+  }
+  const cost3=(b,nx,ny,nz)=> b.kind==='orange'?1:(1+(10-world.access[IDX(nx,ny,nz)])*0.2);
+
+  const DIR8=[[1,0],[-1,0],[0,1],[0,-1],[1,1],[1,-1],[-1,1],[-1,-1]];
+  const H2 =(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
+  const in2=(x,y)=> x>=0&&x<SIZE&&y>=0&&y<SIZE;
+  const cost2=(b,nx,ny)=> b.kind==='orange'?1:(1+(10-world.access[IDX(nx,ny,0)])*0.15);
+
+  function TinyQueue(d,c){ this.data=d||[]; this.length=this.data.length; this.c=c||( (a,b)=>a<b?-1:a>b?1:0 ); if(this.length){ for(let i=(this.length>>1);i>=0;i--) this._down(i);} }
+  TinyQueue.prototype.push=function(x){ this.data.push(x); this.length++; this._up(this.length-1); };
+  TinyQueue.prototype.pop=function(){ if(!this.length) return; const t=this.data[0], b=this.data.pop(); this.length--; if(this.length){ this.data[0]=b; this._down(0);} return t; };
+  TinyQueue.prototype._up=function(p){ const d=this.data,c=this.c,it=d[p]; while(p>0){ const pr=(p-1)>>1,cur=d[pr]; if(c(it,cur)>=0) break; d[p]=cur; p=pr;} d[p]=it; };
+  TinyQueue.prototype._down=function(p){ const d=this.data,c=this.c,h=this.length>>1,it=d[p]; while(p<h){ let l=(p<<1)+1,r=l+1,b=d[l]; if(r<this.length && c(d[r],b)<0){ l=r;b=d[r]; } if(c(b,it)>=0) break; d[p]=b; p=l;} d[p]=it; };
+
+  function path3(b,s,g,max=400000){
+    const key=i=> i.x|(i.y<<7)|(i.z<<14);
+    const open=new TinyQueue([], (a,b)=>a.f-b.f), gS=new Map(), came=new Map();
+    gS.set(key(s),0); open.push({x:s.x,y:s.y,z:s.z,f:H3(s,g)});
+    let v=0;
+    while(open.length&&v<max){
+      const cur=open.pop(); v++;
+      if(cur.x===g.x&&cur.y===g.y&&cur.z===g.z){
+        const path=[]; let n=cur,k=key(cur);
+        for(;;){ path.push({x:n.x,y:n.y,z:n.z}); const p=came.get(k); if(!p) break; n=p; k=key(n); }
+        return path.reverse();
+      }
+      const cK=key(cur), cG=gS.get(cK)??Infinity;
+      for(const d of DIR3){
+        const nx=cur.x+d[0],ny=cur.y+d[1],nz=cur.z+d[2];
+        if(!canMove3(b,cur.x,cur.y,cur.z,nx,ny,nz)) continue;
+        const t=cG+cost3(b,nx,ny,nz), nK=key({x:nx,y:ny,z:nz});
+        if(t<(gS.get(nK)??Infinity)){ gS.set(nK,t); came.set(nK,cur); open.push({x:nx,y:ny,z:nz,f:t+H3({x:nx,y:ny,z:nz},g)}); }
+      }
+    }
+    return [{x:s.x,y:s.y,z:s.z},{x:g.x,y:g.y,z:g.z}];
+  }
+
+  function path2(b,s,g,max=200000){
+    const key=i=> i.x|(i.y<<7);
+    const open=new TinyQueue([], (a,b)=>a.f-b.f), gS=new Map(), came=new Map();
+    const S={x:s.x,y:s.y}, G={x:g.x,y:g.y}; gS.set(key(S),0); open.push({x:S.x,y:S.y,f:H2(S,G)});
+    let v=0;
+    while(open.length&&v<max){
+      const cur=open.pop(); v++;
+      if(cur.x===G.x&&cur.y===G.y){
+        const path=[]; let n=cur,k=key(cur);
+        for(;;){ path.push({x:n.x,y:n.y,z:0}); const p=came.get(k); if(!p) break; n=p; k=key(n); }
+        return path.reverse();
+      }
+      const cK=key(cur), cG=gS.get(cK)??Infinity;
+      for(const d of DIR8){
+        const nx=cur.x+d[0], ny=cur.y+d[1]; if(!in2(nx,ny)) continue;
+        const step=Math.hypot(d[0],d[1])*cost2(b,nx,ny), t=cG+step, nK=key({x:nx,y:ny});
+        if(t<(gS.get(nK)??Infinity)){ gS.set(nK,t); came.set(nK,cur); open.push({x:nx,y:ny,f:t+H2({x:nx,y:ny},G)}); }
+      }
+    }
+    return [{x:S.x,y:S.y,z:0},{x:G.x,y:G.y,z:0}];
+  }
+
+  const findPath=(b,s,g)=> (mode===MODE_2D)?path2(b,s,g):path3(b,s,g);
+
+  function initBots(){
+    bots.length=0;
+    for(let i=0;i<(+orangeCountEl.value||12);i++) bots.push(mkBot('orange'));
+    for(let i=0;i<(+greenCountEl.value ||12);i++) bots.push(mkBot('green'));
+    for(const b of bots){ const s={x:~~b.x,y:~~b.y,z:(mode===MODE_2D?0:~~b.z)}; b.path=findPath(b,s,goalState.current); b.pathIndex=0; b.reached=false; b._zpx=b._zpy=null; b._gaitT=0; }
+    const g=firstGreen(); if(g){ camX=g.x; camY=g.y; camZ=(mode===MODE_2D?0:Math.round(g.z)); }
+  }
+
+  // ====== Trails (3 views) + Zoom trail (screen space) ======
+  const trTop=mkCanvasLike(cvTop), trSide=mkCanvasLike(cvSide), trIso=mkCanvasLike(cvIso);
+  const zTrail=mkCanvasLike(cvTopZoom); zTrail.ctx.imageSmoothingEnabled=false;
+  let prevOPX=null, prevOPY=null, prevTile=null, prevLayer=null, offX=0, offY=0;
+
+  function mkCanvasLike(src){ const c=document.createElement('canvas'); c.width=src.width; c.height=src.height; return {c,ctx:c.getContext('2d')}; }
+  function clearTrails(){ trTop.ctx.clearRect(0,0,trTop.c.width,trTop.c.height); trSide.ctx.clearRect(0,0,trSide.c.width,trSide.c.height); trIso.ctx.clearRect(0,0,trIso.c.width,trIso.c.height); zTrail.ctx.clearRect(0,0,zTrail.c.width,zTrail.c.height); prevOPX=prevOPY=prevTile=prevLayer=null; offX=offY=0; for(const b of bots){ b._zpx=b._zpy=null; } }
+
+  // ====== UI Helpers ======
+  function wireStyle(ctx, v, baseA=0.12, baseW=0.5){ const a=Math.max(0,Math.min(1, baseA*Math.pow(v,0.85))), w=Math.min(2.5, Math.max(baseW, baseW*(0.7+0.3*v))); ctx.strokeStyle=`rgba(255,255,255,${a})`; ctx.lineWidth=w; }
+  function cornerIndex(x,y){ if(x===0&&y===0) return 0; if(x===SIZE-1&&y===0) return 1; if(x===0&&y===SIZE-1) return 2; if(x===SIZE-1&&y===SIZE-1) return 3; return -1; }
+  function elevArrow(ctx,x,y,ev,sc=1){ if(!ev) return; const now=performance.now()/1000, life=2, fade=0.5, a=Math.max(0,Math.min(1,(ev._time+life-now)/fade)); if(a<=0) return; const g=ev.type==='stairUp'?'↑':ev.type==='stairDown'?'↓':ev.type==='rampUp'?'↗':'↘'; ctx.save(); ctx.globalAlpha=a; ctx.fillStyle=(g==='↑'||g==='↓')?'#97b0ff':'#7cf0c4'; ctx.font=`${Math.max(10,12*sc)}px system-ui,sans-serif`; ctx.textAlign='center'; ctx.textBaseline='bottom'; ctx.fillText(g,x,y-6*sc); ctx.restore(); }
+
+  // ====== Bot Update ======
+  function updateBot(b,dt){
+    b._gaitT += dt * timeScale;
+
+    // Refresh path when finished or stuck
+    b._stuckT += dt;
+    const prog=Math.hypot(b.x-b._lastPX,b.y-b._lastPY)+Math.abs(b.z-b._lastPZ);
+    if(prog>0.1) b._stuckT=0; b._lastPX=b.x; b._lastPY=b.y; b._lastPZ=b.z;
+    if(!b.path || b.pathIndex>=b.path.length || b._stuckT>2){ const s={x:~~b.x,y:~~b.y,z:(mode===MODE_2D?0:~~b.z)}; b.path=findPath(b,s,goalState.current); b.pathIndex=0; b._stuckT=0; }
+    if(!b.path||!b.path.length) return;
+
+    const t=b.path[b.pathIndex], dx=t.x-b.x, dy=t.y-b.y, dz=(mode===MODE_2D?0:(t.z-b.z));
+    const dist=Math.hypot(dx,dy,dz)||1; let ux=dx/dist, uy=dy/dist, uz=dz/dist;
+
+    if(b.kind==='green'){
+      const bias=+biasLeftEl.value||0, wob=+wobbleEl.value||0;
+      const lx=-(b.lastDir?.dy||0), ly=(b.lastDir?.dx||1);
+      ux += lx*bias*0.35; uy += ly*bias*0.35;
+      const wobS=Math.sin(2*Math.PI*1.3*b._gaitT + b._wphase), px=-uy, py=ux, wobAmt=wob*0.25*wobS;
+      ux += px*wobAmt; uy += py*wobAmt;
+      const n=Math.hypot(ux,uy,uz)||1; ux/=n; uy/=n; uz/=n;
+    }
+
+    // Fatigue & speed
+    if(b.kind==='green') b.fatigue=clamp((b.fatigue||0)+greenFatigueRate*dt,0,1);
+    else{ const eff=(orangeFatigueRate==null)? greenFatigueRate*orangeFatigueFactor : orangeFatigueRate; b.fatigue=clamp((b.fatigue||0)+eff*dt,0,1); }
+
+    const jitterAmp=(b.kind==='green'? (+speedJitterEl.value||0.3): 0.15);
+    const jitter = jitterAmp * Math.sin(2*Math.PI*0.7*b._gaitT + b._jphase);
+    const minMove = 0.25 * timeScale;
+    const target = Math.max(minMove, ((b.kind==='orange'?orangeSpeed:greenSpeed) + jitter) * (1 - 0.6*(b.fatigue||0)) * timeScale);
+
+    b.speedSmoothed += (target - b.speedSmoothed) * (1 - Math.exp(-6*dt));
+    const dvx=ux*b.speedSmoothed, dvy=uy*b.speedSmoothed, dvz=uz*b.speedSmoothed;
+    const aV = 1 - Math.exp(-(b.kind==='green'?7:9)*dt);
+    b.vx += (dvx-b.vx)*aV; b.vy += (dvy-b.vy)*aV; b.vz += (dvz-b.vz)*aV;
+
+    const prevZ=~~b.z;
+    b.x += b.vx*dt; b.y += b.vy*dt; b.z += (mode===MODE_2D?0:b.vz*dt);
+    b.x=clamp(b.x,0,SIZE-1); b.y=clamp(b.y,0,SIZE-1); b.z=clamp(b.z,0, mode===MODE_2D?0:WORLD_H-1);
+
+    if(Math.hypot(t.x-b.x,t.y-b.y,(mode===MODE_2D?0:(t.z-b.z)))<0.2){
+      const preZ=prevZ, cIdx=cornerIndex(t.x|0, t.y|0);
+      b.x=t.x; b.y=t.y; b.z=(mode===MODE_2D?0:t.z); b.lastDir={dx:dx,dy:dy,dz:dz};
+      if(mode===MODE_3D){
+        const nz=~~b.z, step=nz-preZ;
+        if(step!==0 && cIdx>=0){
+          if(step>0){
+            const viaRampUp = world.ramps[preZ*4+cIdx]===1, viaStairUp=world.stairs[preZ*4+cIdx]===1;
+            if(b.kind!=='green' || viaRampUp){ if(b.kind==='green' && viaRampUp) greenAscents++; }
+            b._elevType= viaRampUp?'rampUp':(viaStairUp?'stairUp':null);
+          }else{
+            const viaStairDown=world.stairs[nz*4+cIdx]===1, viaRampDown=world.ramps[nz*4+cIdx]===1;
+            if(viaStairDown||viaRampDown){ if(b.kind==='green') greenDescents++; }
+            b._elevType= viaRampDown?'rampDown':(viaStairDown?'stairDown':null);
+          }
+          b._elevTime=performance.now()/1000;
+          statBox.textContent=`Green ascents: ${greenAscents} · descents: ${greenDescents}`;
+        }
+      }
+      b.pathIndex++; if(b.pathIndex>=b.path.length){ b.reached=true; goalState.reachedBy.add(b); }
+    }
+
+    // Trails (3 views)
+    const tileTop=Math.max(2, ~~(Math.min(cvTop.width,cvTop.height)/SIZE * zoomTop));
+    trTop.ctx.fillStyle=(b.kind==='orange')?'rgba(255,167,38,0.55)':'rgba(32,227,122,0.55)';
+    trTop.ctx.fillRect(~~(b.x*tileTop+tileTop/2), ~~(b.y*tileTop+tileTop/2), 1,1);
+
+    const sx=(cvSide.width/SIZE)*zoomSide, sz=(cvSide.height/Math.max(1,WORLD_H))*zoomSide;
+    trSide.ctx.fillStyle=(b.kind==='orange')?'rgba(255,167,38,0.6)':'rgba(32,227,122,0.6)';
+    trSide.ctx.fillRect(~~(b.x*sx), ~~(cvSide.height - (mode===MODE_2D?0:b.z*sz)), 1,1);
+
+    const tw=8*zoomIso, th=4*zoomIso, hz=3*zoomIso, ix=(x,y)=>(x-y)*(tw/2)+cvIso.width/2, iy=(x,y,z)=>(x+y)*(th/2)-(mode===MODE_2D?0:z)*hz+120;
+    trIso.ctx.fillStyle=(b.kind==='orange')?'rgba(255,167,38,0.5)':'rgba(32,227,122,0.5)';
+    trIso.ctx.fillRect(~~(ix(b.x+0.5,b.y+0.5)), ~~(iy(b.x+0.5,b.y+0.5,(mode===MODE_2D?0:b.z)+0.5)), 1,1);
+  }
+
+  // ====== Camera & Goal Cycle ======
+  function updateCam(dt){
+    const g=firstGreen(); if(!g) return;
+    camZ=(mode===MODE_2D?0:~~g.z);
+    const tilesAcross = VIEW_BASE_TILES / clamp(zoomScale,0.5,4), half=tilesAcross/2;
+    const tx=clamp(g.x, half, SIZE-half), ty=clamp(g.y, half, SIZE-half);
+    const a=1 - Math.exp(-followSpeed*dt); camX+= (tx-camX)*a; camY+= (ty-camY)*a;
+  }
+
+  function setAllPaths(){ for(const b of bots){ b.reached=false; b.path=findPath(b,{x:~~b.x,y:~~b.y,z:(mode===MODE_2D?0:~~b.z)},goalState.current); b.pathIndex=0; } }
+  function maybeRenew(){
+    if(goalPolicy==='random'){ if(bots.some(b=>b.reached)){ newGoal(); setAllPaths(); } }
+    else { const any=bots.length>0, all=any && bots.every(b=>b.reached); if(all){ newGoal(); setAllPaths(); } }
+  }
+
+  // ====== Path Overlays ======
+  function drawPathTop(tile){
+    if(!showPaths) return; tTop.save(); tTop.globalAlpha=0.9; tTop.strokeStyle='#ff5252'; tTop.fillStyle='#ff5252';
+    for(const b of bots){ if(!b.path||b.path.length<2) continue; tTop.beginPath(); let st=false; for(let i=b.pathIndex;i<b.path.length;i++){ const n=b.path[i], cx=n.x*tile+tile/2, cy=n.y*tile+tile/2; if(!st){ tTop.moveTo(cx,cy); st=true; } else tTop.lineTo(cx,cy); if(tile>=6) tTop.fillRect(cx-1,cy-1,2,2);} tTop.stroke(); }
+    tTop.restore();
+  }
+  function drawPathSide(){
+    if(!showPaths) return; const W=cvSide.width,H=cvSide.height, sx=(W/SIZE)*zoomSide, sz=(H/Math.max(1,WORLD_H))*zoomSide;
+    tSide.save(); tSide.globalAlpha=0.9; tSide.strokeStyle='#ff5252'; tSide.fillStyle='#ff5252';
+    for(const b of bots){ if(!b.path||b.path.length<2) continue; tSide.beginPath(); let st=false; for(let i=b.pathIndex;i<b.path.length;i++){ const n=b.path[i], cx=n.x*sx, cz=H-((mode===MODE_2D?0:n.z))*sz; if(!st){ tSide.moveTo(cx,cz); st=true; } else tSide.lineTo(cx,cz); tSide.fillRect(cx-1,cz-1,2,2);} tSide.stroke(); }
+    tSide.restore();
+  }
+  function drawPathIso(){
+    if(!showPaths) return; const W=cvIso.width, tw=8*zoomIso, th=4*zoomIso, hz=3*zoomIso, ix=(x,y)=>(x-y)*(tw/2)+W/2, iy=(x,y,z)=>(x+y)*(th/2)-(mode===MODE_2D?0:z)*hz+120;
+    tIso.save(); tIso.globalAlpha=0.9; tIso.strokeStyle='#ff5252'; tIso.fillStyle='#ff5252';
+    for(const b of bots){ if(!b.path||b.path.length<2) continue; tIso.beginPath(); let st=false; for(let i=b.pathIndex;i<b.path.length;i++){ const n=b.path[i], cx=ix(n.x+0.5,n.y+0.5), cy=iy(n.x+0.5,n.y+0.5,(mode===MODE_2D?0:n.z)+0.5); if(!st){ tIso.moveTo(cx,cy); st=true; } else tIso.lineTo(cx,cy); tIso.fillRect(cx-1,cy-1,2,2);} tIso.stroke(); }
+    tIso.restore();
+  }
+  function drawPathZoom(view){
+    if(!showPaths) return; const {tile,startXf,startYf,W,H}=view; tZoom.save(); tZoom.globalAlpha=0.9; tZoom.strokeStyle='#ff5252'; tZoom.fillStyle='#ff5252';
+    for(const b of bots){ if(!b.path||b.path.length<2) continue; tZoom.beginPath(); let st=false; for(let i=b.pathIndex;i<b.path.length;i++){ const n=b.path[i], xi=(n.x-startXf)*tile+tile/2, yi=(n.y-startYf)*tile+tile/2; if(xi<-10||yi<-10||xi>W+10||yi>H+10) continue; if(!st){ tZoom.moveTo(xi,yi); st=true; } else tZoom.lineTo(xi,yi); tZoom.fillRect(xi-1,yi-1,2,2);} if(st) tZoom.stroke(); }
+    tZoom.restore();
+  }
+
+  // ====== Rendering ======
+  function drawTop(){
+    const W=cvTop.width,H=cvTop.height, tile=Math.max(2, ~~(Math.min(W,H)/SIZE * zoomTop));
+    tTop.clearRect(0,0,W,H);
+    const z=(mode===MODE_2D?0: (Date.now()/1500|0)%WORLD_H);
+    for(let y=0;y<SIZE;y++) for(let x=0;x<SIZE;x++){ const noisy=world.floors[IDX(x,y,z)], g=~~(22+(1-noisy)*28); tTop.fillStyle=`rgb(${g},${g+5},${g+10})`; tTop.fillRect(x*tile,y*tile,tile,tile); }
+    if(mode===MODE_3D){ for(let c=0;c<4;c++){ const p=cornerXY(c); if(world.stairs[z*4+c]){ tTop.fillStyle='#97b0ff'; tTop.fillText('▲', p.x*tile+3,p.y*tile+3); } if(world.ramps[z*4+c]){ tTop.fillStyle='#7cf0c4'; tTop.fillText('▭', p.x*tile+13,p.y*tile+3); } } }
+    if(showWireTop){ wireStyle(tTop, wireVis, 0.15, 0.5); for(let i=0;i<=SIZE;i+=10){ tTop.beginPath(); tTop.moveTo(i*tile+0.5,0); tTop.lineTo(i*tile+0.5,H); tTop.stroke(); tTop.beginPath(); tTop.moveTo(0,i*tile+0.5); tTop.lineTo(W,i*tile+0.5); tTop.stroke(); } }
+    tTop.drawImage(trTop.c,0,0); drawPathTop(tile);
+    tTop.strokeStyle=COL_GOAL; tTop.lineWidth=2; tTop.strokeRect(goalState.current.x*tile+1,goalState.current.y*tile+1,tile-2,tile-2);
+    for(const b of bots){ const px=b.x*tile+tile/2, py=b.y*tile+tile/2; tTop.fillStyle=b.kind==='orange'?COL_ORANGE:COL_GREEN; tTop.beginPath(); tTop.arc(px,py,Math.max(3,tile*0.3),0,6.283); tTop.fill(); if(b._elevType&&b._elevTime){ elevArrow(tTop,px,py-Math.max(6,tile*0.3+4),{type:b._elevType,_time:b._elevTime},1); } }
+  }
+
+  function drawSide(){
+    const W=cvSide.width,H=cvSide.height, sx=(W/SIZE)*zoomSide, sz=(H/Math.max(1,WORLD_H))*zoomSide;
+    tSide.clearRect(0,0,W,H);
+    if(mode===MODE_3D){
+      for(let z=0;z<WORLD_H;z++){ let acc=0; for(let x=0;x<SIZE;x++){ for(let y=0;y<SIZE;y+=5) acc+=world.access[IDX(x,y,z)]; } acc/=(SIZE*(SIZE/5)); const g=~~(16+(acc/10)*26); tSide.fillStyle=`rgb(${g},${g+4},${g+8})`; tSide.fillRect(0,H-(z+1)*sz,W,sz+1); }
+      if(showWireSide){ tSide.save(); wireStyle(tSide, wireVis, 0.15, 0.5); for(let x=0;x<=SIZE;x+=10){ tSide.beginPath(); tSide.moveTo(x*sx+0.5,0); tSide.lineTo(x*sx+0.5,H); tSide.stroke(); } for(let z=0;z<=WORLD_H;z+=10){ tSide.beginPath(); tSide.moveTo(0,H-z*sz+0.5); tSide.lineTo(W,H-z*sz+0.5); tSide.stroke(); } tSide.restore(); }
+    } else {
+      tSide.fillStyle='rgba(120,140,160,0.15)'; tSide.fillRect(0,H-2,W,2);
+      if(showWireSide){ tSide.save(); wireStyle(tSide, wireVis, 0.12, 0.5); for(let x=0;x<=SIZE;x+=10){ tSide.beginPath(); tSide.moveTo(x*sx+0.5,0); tSide.lineTo(x*sx+0.5,H); tSide.stroke(); } tSide.restore(); }
+    }
+    tSide.drawImage(trSide.c,0,0); drawPathSide();
+    for(const b of bots){ const px=b.x*sx, pz=H-(mode===MODE_2D?0:b.z*sz); tSide.fillStyle=b.kind==='orange'?COL_ORANGE:COL_GREEN; tSide.fillRect(px-3,pz-3,6,6); if(b._elevType&&b._elevTime){ elevArrow(tSide,px,pz-8,{type:b._elevType,_time:b._elevTime},1); } }
+  }
+
+  function drawIsoWire(ctx, z=zoomIso){
+    const W=cvIso.width, tw=8*z, th=4*z, hz=3*z, ix=(x,y)=>(x-y)*(tw/2)+W/2, iy=(x,y,z)=>(x+y)*(th/2)-z*hz+120;
+    ctx.save(); wireStyle(ctx, wireVis, 0.12, 0.5);
+    for(let x=0;x<=SIZE;x+=10){ ctx.beginPath(); ctx.moveTo(ix(x,0),iy(x,0,0)); ctx.lineTo(ix(x,SIZE),iy(x,SIZE,0)); ctx.stroke(); }
+    for(let y=0;y<=SIZE;y+=10){ ctx.beginPath(); ctx.moveTo(ix(0,y),iy(0,y,0)); ctx.lineTo(ix(SIZE,y,0),iy(SIZE,y,0)); ctx.stroke(); }
+    wireStyle(ctx, Math.max(1, wireVis*0.9), 0.08, 0.5);
+    for(let z0=0;z0<=WORLD_H;z0+=10){ ctx.beginPath(); ctx.moveTo(ix(0,0),iy(0,0,z0)); ctx.lineTo(ix(SIZE,0),iy(SIZE,0,z0)); ctx.lineTo(ix(SIZE,SIZE),iy(SIZE,SIZE,z0)); ctx.lineTo(ix(0,SIZE),iy(0,SIZE,z0)); ctx.closePath(); ctx.stroke(); }
+    ctx.restore();
+  }
+
+  function drawIso(){
+    const W=cvIso.width; tIso.clearRect(0,0,W,cvIso.height);
+    if(showWireIso) drawIsoWire(tIso, zoomIso);
+    tIso.drawImage(trIso.c,0,0); drawPathIso();
+    const tw=8*zoomIso, th=4*zoomIso, hz=3*zoomIso, ix=(x,y)=>(x-y)*(tw/2)+W/2, iy=(x,y,z)=>(x+y)*(th/2)-(mode===MODE_2D?0:z)*hz+120;
+    for(const b of bots){ const z=(mode===MODE_2D?0:b.z), cx=ix(b.x+0.5,b.y+0.5), cy=iy(b.x+0.5,b.y+0.5,z+0.5); tIso.fillStyle=b.kind==='orange'?COL_ORANGE:COL_GREEN; tIso.beginPath(); tIso.arc(cx,cy,Math.max(3,3*zoomIso),0,6.283); tIso.fill(); if(b._elevType&&b._elevTime){ elevArrow(tIso,cx,cy-10*zoomIso,{type:b._elevType,_time:b._elevTime},zoomIso); } }
+  }
+
+  function drawZoom(){
+    const g=firstGreen(); const W=cvTopZoom.width,H=cvTopZoom.height; tZoom.clearRect(0,0,W,H); if(!g) return;
+    const tilesAcross=clamp(~~(VIEW_BASE_TILES/clamp(zoomScale,0.5,4)),6,60), tile=Math.max(4, ~~(Math.min(W,H)/tilesAcross));
+    const tilesX=Math.ceil(W/tile)+2, tilesY=Math.ceil(H/tile)+2, halfX=tilesX/2, halfY=tilesY/2;
+    camZ=(mode===MODE_2D?0:~~camZ);
+    const startXf=camX-halfX, startYf=camY-halfY, originPX=startXf*tile, originPY=startYf*tile, cz=(mode===MODE_2D?0:~~camZ);
+
+    if(prevLayer!==cz || prevTile==null || Math.abs(prevTile-tile)>0.5){ zTrail.ctx.clearRect(0,0,zTrail.c.width,zTrail.c.height); prevOPX=originPX; prevOPY=originPY; prevTile=tile; prevLayer=cz; offX=offY=0; for(const b of bots){ b._zpx=b._zpy=null; } }
+    if(prevOPX!=null){ const dx=originPX-prevOPX, dy=originPY-prevOPY, dxI=dx>0?Math.floor(dx):Math.ceil(dx), dyI=dy>0?Math.floor(dy):Math.ceil(dy);
+      if(dxI||dyI){ const tmp=mkCanvasLike(zTrail.c); tmp.ctx.drawImage(zTrail.c,0,0); zTrail.ctx.clearRect(0,0,zTrail.c.width,zTrail.c.height); zTrail.ctx.drawImage(tmp.c,-dxI,-dyI); }
+      offX += dx-dxI; offY += dy-dyI;
+      if(Math.abs(offX)>=1||Math.abs(offY)>=1){ const ax=offX>0?Math.floor(offX):Math.ceil(offX), ay=offY>0?Math.floor(offY):Math.ceil(offY); if(ax||ay){ const tmp=mkCanvasLike(zTrail.c); tmp.ctx.drawImage(zTrail.c,0,0); zTrail.ctx.clearRect(0,0,zTrail.c.width,zTrail.c.height); zTrail.ctx.drawImage(tmp.c,-ax,-ay); offX-=ax; offY-=ay; } }
+    }
+    prevOPX=originPX; prevOPY=originPY; prevTile=tile; prevLayer=cz;
+
+    const fracX=(startXf-Math.floor(startXf))*tile, fracY=(startYf-Math.floor(startYf))*tile, sx0=~~startXf, sy0=~~startYf;
+    for(let yi=0; yi<tilesY; yi++){ const y=sy0+yi; if(y<0||y>=SIZE) continue; for(let xi=0; xi<tilesX; xi++){ const x=sx0+xi; if(x<0||x>=SIZE) continue;
+      const noisy=world.floors[IDX(x,y,cz)], g2=~~(22+(1-noisy)*28); tZoom.fillStyle=`rgb(${g2},${g2+5},${g2+10})`; tZoom.fillRect(xi*tile-fracX, yi*tile-fracY, tile, tile);
+    } }
+
+    // Screen-space trails
+    zTrail.ctx.save(); zTrail.ctx.globalAlpha=0.9; const alphaZ=1 - Math.exp(-24*(renderDt||1/60)); const dot=Math.max(1, Math.round(tile/12));
+    for(const b of bots){ if(mode===MODE_3D && ~~b.z!==cz) continue; const x=(b.x-startXf+0.5)*tile+offX, y=(b.y-startYf+0.5)*tile+offY; if(b._zpx==null){ b._zpx=x; b._zpy=y; } else { b._zpx += (x-b._zpx)*alphaZ; b._zpy += (y-b._zpy)*alphaZ; } const xi=~~b._zpx, yi=~~b._zpy; if(xi<-dot||yi<-dot||xi>W+dot||yi>H+dot) continue; zTrail.ctx.fillStyle=b.kind==='orange'?'rgba(255,167,38,0.65)':'rgba(32,227,122,0.65)'; const h=dot>>1; zTrail.ctx.fillRect(xi-h, yi-h, dot, dot); }
+    zTrail.ctx.restore();
+
+    tZoom.drawImage(zTrail.c,0,0);
+
+    if(showWireTop){ wireStyle(tZoom, wireVis, 0.15, 0.5); for(let xi=0; xi<=tilesX; xi++){ const xpx=xi*tile-fracX+0.5; tZoom.beginPath(); tZoom.moveTo(xpx,0); tZoom.lineTo(xpx,H); tZoom.stroke(); } for(let yi=0; yi<=tilesY; yi++){ const ypx=yi*tile-fracY+0.5; tZoom.beginPath(); tZoom.moveTo(0,ypx); tZoom.lineTo(W,ypx); tZoom.stroke(); } }
+    drawPathZoom({tile,startXf,startYf,W,H});
+
+    // Bots + fatigue label
+    const gbot=firstGreen();
+    for(const b of bots){
+      if(mode===MODE_3D && ~~b.z!==cz) continue; if(b._zpx==null) continue;
+      const xi=b._zpx-offX, yi=b._zpy-offY; if(xi<-10||yi<-10||xi>W+10||yi>H+10) continue;
+      tZoom.fillStyle=b.kind==='orange'?COL_ORANGE:COL_GREEN; tZoom.beginPath(); tZoom.arc(xi,yi,Math.max(3, ~~(tile*0.28)),0,6.283); tZoom.fill();
+      if(b._elevType&&b._elevTime){ elevArrow(tZoom, xi, yi-Math.max(8, ~~(tile*0.3)+6), {type:b._elevType,_time:b._elevTime}, Math.max(1, tile/16)); }
+      if(b===gbot){ const pct=Math.round((b.fatigue||0)*100), label=`${pct}%`, fontPx=Math.max(10, ~~(tile*0.22)+6); tZoom.save(); tZoom.font=`${fontPx}px system-ui,sans-serif`; tZoom.textBaseline='middle'; tZoom.textAlign='left'; const tx=xi+Math.max(8, ~~(tile*0.30)+6), ty=yi; const m=tZoom.measureText(label), bgW=~~m.width+8, bgH=fontPx+4, bgX=tx-4, bgY=ty-(bgH>>1); tZoom.fillStyle='rgba(0,0,0,0.55)'; tZoom.fillRect(bgX,bgY,bgW,bgH); tZoom.fillStyle='#e7edf4'; tZoom.fillText(label,tx,ty); tZoom.restore(); }
+    }
+  }
+
+  // ====== Export ======
+  function exportCanvas(src,name,scale){ const out=document.createElement('canvas'); out.width=src.width*scale; out.height=src.height*scale; const o=out.getContext('2d'); o.imageSmoothingEnabled=false; o.setTransform(scale,0,0,scale,0,0); o.drawImage(src,0,0); const url=out.toDataURL('image/png'); const a=document.createElement('a'); a.href=url; a.download=name+`_${scale}x.png`; a.click(); }
+  function isoTrailsPlusWire(){ const tmp=document.createElement('canvas'); tmp.width=cvIso.width; tmp.height=cvIso.height; const c=tmp.getContext('2d'); drawIsoWire(c, zoomIso); c.drawImage(trIso.c,0,0); return tmp; }
+
+  // ====== DSL ======
+  function applyDSL(text){
+    const kv={}; text.split(/[\s\r\n]+/).filter(Boolean).forEach(t=>{ const m=t.match(/^([^=]+)=(.+)$/); if(m) kv[m[1].trim()]=m[2].trim(); });
+    if(kv['seed']) seedInputEl.value=kv['seed'];
+    if(kv['mode']){ mode=(kv['mode'].toLowerCase()==='2d')?MODE_2D:MODE_3D; btnMode.textContent='Mode: '+(mode===MODE_2D?'2D Top-Down':'3D Grid'); }
+    if(kv['bots.orange']) orangeCountEl.value=String(Math.max(0,Math.min(200,parseInt(kv['bots.orange'],10)||0)));
+    if(kv['bots.green'])  greenCountEl.value =String(Math.max(0,Math.min(200,parseInt(kv['bots.green'],10)||0)));
+    if(kv['goals.policy']){ goalPolicy=(kv['goals.policy']==='team'?'team':'random'); goalPolicyEl.value=goalPolicy; }
+    if(kv['orange.speed']) orangeSpeed=Math.max(0.1, parseFloat(kv['orange.speed'])||orangeSpeed);
+    if(kv['green.speed'])  greenSpeed =Math.max(0.1, parseFloat(kv['green.speed']) ||greenSpeed);
+    if(kv['green.bias'])   biasLeftEl.value=String(Math.max(0,Math.min(1,parseFloat(kv['green.bias'])||0)));
+    if(kv['green.wobble']) wobbleEl.value  =String(Math.max(0,Math.min(1,parseFloat(kv['green.wobble'])||0)));
+    if(kv['green.fatigue']){ const v=parseFloat(kv['green.fatigue']); if(Number.isFinite(v)){ greenFatigueRate=clamp(v,0,0.02); sFatigueGreen.value=String(greenFatigueRate); } }
+    if(kv['orange.fatigue']){ const v=parseFloat(kv['orange.fatigue']); orangeFatigueRate = Number.isFinite(v)? clamp(v,0,0.02): null; } else { orangeFatigueRate=null; }
+    if(kv['orange.fatigue.factor']){ const f=parseFloat(kv['orange.fatigue.factor']); if(Number.isFinite(f)) orangeFatigueFactor=Math.max(0,f); }
+
+    if(kv['camera.zoom4'])     { const v=parseFloat(kv['camera.zoom4']); if(Number.isFinite(v)){ sZoom.value=String(v); zoomScale=v; lblZoom.textContent=v.toFixed(1)+'×'; } }
+    if(kv['camera.top.zoom'])  { const v=parseFloat(kv['camera.top.zoom']);  if(Number.isFinite(v)&&v>0){ zoomTop=v;  sZoomTop.value=String(v);  lblZoomTop.textContent = v.toFixed(1)+'×'; } }
+    if(kv['camera.side.zoom']) { const v=parseFloat(kv['camera.side.zoom']); if(Number.isFinite(v)&&v>0){ zoomSide=v; sZoomSide.value=String(v); lblZoomSide.textContent= v.toFixed(1)+'×'; } }
+    if(kv['camera.iso.zoom'])  { const v=parseFloat(kv['camera.iso.zoom']);  if(Number.isFinite(v)&&v>0){ zoomIso=v;  sZoomIso.value=String(v);  lblZoomIso.textContent = v.toFixed(1)+'×'; } }
+    if(kv['export.scale'])     { const v=Math.round(Math.max(2,Math.min(10,parseFloat(kv['export.scale'])))); if(Number.isFinite(v)){ exportScale=v; sExportScale.value=String(v); lblExportScale.textContent=`${v}×`; } }
+    if(kv['wire.visibility'])  { const v=clamp(parseFloat(kv['wire.visibility'])||1,1,6); wireVis=v; sWireVis.value=String(v); lblWireVis.textContent=`${v.toFixed(1)}×`; }
+
+    refreshFatigueUI(); reseed(seedInputEl.value||'ark100'); genWorld(); newGoal(); initBots(); clearTrails();
+  }
+
+  // ====== Controls ======
+  btnStart.onclick=()=>running=true;
+  btnPause.onclick=()=>running=false;
+  btnReset.onclick=()=>{ running=false; reseed(seedInputEl.value||'ark100'); genWorld(); newGoal(); initBots(); clearTrails(); running=true; };
+  btnNewGoal.onclick=()=>{ newGoal(); setAllPaths(); };
+  btnClearTrails.onclick=clearTrails;
+  btnWireTop.onclick =()=>{ showWireTop=!showWireTop; btnWireTop.dataset.on=showWireTop?'1':''; };
+  btnWireSide.onclick=()=>{ showWireSide=!showWireSide; btnWireSide.dataset.on=showWireSide?'1':''; };
+  btnWireIso.onclick =()=>{ showWireIso=!showWireIso; btnWireIso.dataset.on=showWireIso?'1':''; };
+  btnTogglePaths.onclick=()=>{ showPaths=!showPaths; btnTogglePaths.dataset.on=showPaths?'1':''; };
+  btnMode.onclick=()=>{ mode=(mode===MODE_3D)?MODE_2D:MODE_3D; btnMode.textContent='Mode: '+(mode===MODE_2D?'2D Top-Down':'3D Grid'); if(mode===MODE_2D){ for(const b of bots){ b.z=0; } goalState.current.z=0; } newGoal(); setAllPaths(); clearTrails(); };
+  goalPolicyEl.onchange=()=>{ goalPolicy=goalPolicyEl.value; newGoal(); setAllPaths(); };
+
+  const fmt=n=>(+n).toFixed(1);
+  sZoom.oninput     =()=>{ zoomScale=+sZoom.value; lblZoom.textContent=fmt(zoomScale)+'×'; };
+  sZoomTop.oninput  =()=>{ zoomTop = +sZoomTop.value; lblZoomTop.textContent = fmt(zoomTop)+'×'; };
+  sZoomSide.oninput =()=>{ zoomSide= +sZoomSide.value; lblZoomSide.textContent=fmt(zoomSide)+'×'; };
+  sZoomIso.oninput  =()=>{ zoomIso = +sZoomIso.value; lblZoomIso.textContent = fmt(zoomIso)+'×'; };
+  sExportScale.oninput=()=>{ exportScale=Math.round(+sExportScale.value); lblExportScale.textContent=`${exportScale}×`; };
+  sWireVis.oninput  =()=>{ wireVis=Math.max(1,+sWireVis.value||1); lblWireVis.textContent=fmt(wireVis)+'×'; };
+
+  function refreshFatigueUI(){
+    lblFatigueGreen.textContent=greenFatigueRate.toFixed(4);
+    if(orangeFatigueRate==null){ const eff=greenFatigueRate*orangeFatigueFactor; lblFatigueOrange.textContent=eff.toFixed(4)+' (linked)'; fatigueOrangeDisplay.value=eff.toFixed(4)+' (linked)'; }
+    else { lblFatigueOrange.textContent=orangeFatigueRate.toFixed(4)+' (DSL)'; fatigueOrangeDisplay.value=orangeFatigueRate.toFixed(4)+' (DSL)'; }
+  }
+  sFatigueGreen.oninput=()=>{ greenFatigueRate=clamp(+sFatigueGreen.value||0,0,0.02); refreshFatigueUI(); };
+
+  btnExportTop.onclick =()=> exportCanvas(trTop.c,              'top_trails_only',    exportScale);
+  btnExportSide.onclick=()=> exportCanvas(cvSide,               'side',               exportScale);
+  btnExportIso.onclick =()=> exportCanvas(isoTrailsPlusWire(),  'iso_trails_wire',    exportScale);
+  btnExportZoom.onclick=()=> exportCanvas(cvTopZoom,            'zoom_everything',    exportScale);
+  btnApplyDSL.onclick  =()=> applyDSL($('dsl').value);
+
+  timeScaleButtons.forEach(b=> b.onclick=()=>{ timeScaleButtons.forEach(x=>x.dataset.on=''); b.dataset.on='1'; timeScale=+(b.dataset.scale||1); });
+
+  // ====== Main Loop ======
+  function renderAll(){ drawTop(); drawSide(); drawIso(); drawZoom(); }
+  function tick(ts){ if(!tPrev) tPrev=ts; const dt=Math.min(0.05,(ts-tPrev)/1000); renderDt=dt; tPrev=ts;
+    if(running){ for(const b of bots) updateBot(b,dt); updateCam(dt); maybeRenew(); }
+    renderAll(); requestAnimationFrame(tick);
+  }
+
+  // ====== Boot ======
+  lblExportScale.textContent=`${exportScale}×`; lblWireVis.textContent=`${wireVis.toFixed(1)}×`; sFatigueGreen.value=String(greenFatigueRate); refreshFatigueUI();
+  reseed(seedInputEl.value||'ark100'); genWorld(); newGoal(); initBots(); renderAll(); requestAnimationFrame(tick);
+})();
+</script>
+</body>
+</html>
