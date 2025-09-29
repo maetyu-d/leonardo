@@ -1,0 +1,983 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Four-View Wireframe City Bots — Clean</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.min.js"></script>
+  <style>
+    html, body { margin:0; padding:0; background:#0b0b0b; color:#d8d8d8; font-family: ui-monospace, Menlo, Consolas, monospace; }
+    #ui { position:fixed; top:8px; left:8px; right:8px; display:flex; gap:8px; align-items:center; flex-wrap:wrap; z-index:10; }
+    .badge { background:#111; border:1px solid #333; padding:4px 8px; border-radius:8px; font-size:12px; display:flex; align-items:center; gap:6px; }
+    .badge[role=button]{ cursor:pointer; }
+    input[type=number]{ width:56px; background:#0e0e0e; border:1px solid #444; color:#eaeaea; border-radius:6px; padding:2px 6px; }
+    .legend { position:fixed; left:10px; bottom:10px; font-size:12px; background:#101010cc; border:1px solid #333; border-radius:8px; padding:8px 10px; display:none; z-index:5; }
+    #dslModal{ position:fixed; inset:0; background:#0008; display:none; align-items:center; justify-content:center; z-index:50; }
+    #dslCard{ background:#0f0f0f; border:1px solid #333; border-radius:10px; width:92%; max-width:840px; padding:14px; }
+    #dslText{ width:100%; height:220px; background:#0a0a0a; border:1px solid #444; color:#e8e8e8; border-radius:8px; padding:8px; font:12px ui-monospace,Menlo,Consolas,monospace; }
+    #dslActions{ margin-top:8px; display:flex; gap:8px; justify-content:flex-end; }
+    .btn{ background:#171717; border:1px solid #444; border-radius:8px; padding:6px 10px; color:#e6e6e6; cursor:pointer; }
+    .btn:hover{ background:#1d1d1d; }
+    #dslError{ color:#ff8a8a; font-size:12px; min-height:1em; margin-top:4px; }
+    canvas { display:block; }
+  </style>
+</head>
+<body>
+  <div id="ui">
+    <div id="timeBadge" class="badge" role="button" title="Toggle time ⏸/1×/10× (T)">Time ⏸</div>
+    <div id="modeBadge" class="badge" role="button" title="Toggle 3D/2D (M)">Mode: 3D</div>
+    <div class="badge">Green <input id="numGreen" type="number" min="0" max="9999" step="1" value="1"></div>
+    <div class="badge">Orange <input id="numOrange" type="number" min="0" max="9999" step="1" value="1"></div>
+  </div>
+
+  <div id="legend" class="legend">
+    <div>Legend (press L to toggle)</div>
+    <div>□ Buildings (wireframe) + 10% surfaces</div>
+    <div>— Sky bridges • ┄ Streets</div>
+    <div><span style="color:#7CFF6B">● Green</span> ramp-only, asymmetric, 0.9× speed, rests 20s</div>
+    <div><span style="color:#FFA84B">● Orange</span> fastest path, rests 15s</div>
+  </div>
+
+  <!-- DSL modal -->
+  <div id="dslModal">
+    <div id="dslCard">
+      <div style="font-weight:600; margin-bottom:6px;">Simulation DSL</div>
+      <textarea id="dslText" spellcheck="false"># Example:
+# border: on
+# mode2d: off
+# green_count: 3
+# orange_count: 2
+# green_left_bias: 1.25
+# green_right_bias: 0.85
+# orange_speed_mul: 1.00
+# green_speed_mul: 0.90
+</textarea>
+      <div id="dslActions">
+        <button class="btn" id="dslClose">Close</button>
+        <button class="btn" id="dslApply">Apply</button>
+      </div>
+      <div id="dslError"></div>
+    </div>
+  </div>
+
+<script>
+// ============================
+// Constants & config
+// ============================
+const WORLD_SIZE = 10000;
+const VOXEL = 100;
+const BUILDING_GRID = 10;
+const CELL_SIZE = WORLD_SIZE / BUILDING_GRID;
+let MIN_FLOORS = 5, MAX_FLOORS = 20;
+let SKY_BRIDGE_CHANCE = 0.6;
+let BUILDING_CHANCE = 0.55;
+let PARK_CHANCE = 0.20;
+let BUILDING_SURFACE_ALPHA = 26; // ~10%
+
+const BOT_SPEED = 200;
+const FRAME_RATE = 60;
+
+// Time: T toggles paused/1x/10x
+const TIME_OPTIONS = [0,1,10];
+let timeIdx = 0;
+let TIME_SCALE = TIME_OPTIONS[timeIdx];
+let paused = true;
+
+// Modes
+let MODE_2D = false;
+
+// Trails
+let TRAIL_MIN_DIST = VOXEL * 0.25;
+let TRAIL_MAX_POINTS = 12000; // used when bots >= 10
+let FOLLOW_R = 1600;
+
+// UI state
+let SPLIT_BORDER_ON = true;
+
+// Texture table
+const TEXTURES = [
+  { id:'polished_concrete', score:1.00 },
+  { id:'sealed_wood',       score:0.95 },
+  { id:'tile',              score:0.94 },
+  { id:'short_carpet',      score:0.92 },
+  { id:'steel_grate',       score:0.90 },
+  { id:'asphalt',           score:0.95 },
+  { id:'pavers',            score:0.90 },
+  { id:'rubber',            score:0.97 },
+  { id:'packed_gravel',     score:0.82 },
+  { id:'grass',             score:0.75 },
+  { id:'sand',              score:0.60 },
+  { id:'ice',               score:0.50 }
+];
+const TEXTURE_BY_ID = TEXTURES.reduce((m,t)=>{ m[t.id]=t; return m; },{});
+function pickTexture(){ return TEXTURES[(Math.random()*TEXTURES.length)|0].id; }
+
+// ============================
+// Helpers
+// ============================
+function randRange(a,b){ return a + Math.random()*(b-a); }
+function choice(arr){ return arr[(Math.random()*arr.length)|0]; }
+function gridToWorld(i,j){ return {x:(i+0.5)*CELL_SIZE - WORLD_SIZE/2, y:0, z:(j+0.5)*CELL_SIZE - WORLD_SIZE/2}; }
+function angleDiff(a,b){ let d=a-b; while(d>Math.PI)d-=2*Math.PI; while(d<-Math.PI)d+=2*Math.PI; return d; }
+function hexToRGB(h){ return {r:parseInt(h.slice(1,3),16), g:parseInt(h.slice(3,5),16), b:parseInt(h.slice(5,7),16)}; }
+function updateTimeBadge(){ const el=document.getElementById('timeBadge'); if(!el) return; el.textContent = TIME_SCALE===0?'Time ⏸':('Time ×'+TIME_SCALE); }
+function toggleTime(){ timeIdx=(timeIdx+1)%TIME_OPTIONS.length; TIME_SCALE=TIME_OPTIONS[timeIdx]; paused=(TIME_SCALE===0); updateTimeBadge(); }
+function updateModeBadge(){ const el=document.getElementById('modeBadge'); if(el) el.textContent = 'Mode: ' + (MODE_2D?'2D':'3D'); }
+
+// ============================
+// City structures & graph
+// ============================
+class Building{
+  constructor(i,j,floors,footprint){ this.i=i; this.j=j; this.floors=floors; this.footprint=footprint;
+    const c=gridToWorld(i,j); this.x=c.x; this.y=0; this.z=c.z; this.id='B_'+i+'_'+j;
+    this.rampEdge = choice(['N','S','E','W']); this.floorTextures=new Array(floors);
+  }
+  centerOfFloor(f){ return {x:this.x,y:f*VOXEL,z:this.z}; }
+  connectorPos(edge,f){ let {w,d}=this.footprint; let x=this.x,y=f*VOXEL,z=this.z;
+    if(edge==='N') z-=d/2; if(edge==='S') z+=d/2; if(edge==='W') x-=w/2; if(edge==='E') x+=w/2; return {x,y,z}; }
+}
+class Bridge{
+  constructor(b1,b2,floor,edge1,edge2){
+    this.b1=b1; this.b2=b2; this.floor=floor; this.edge1=edge1; this.edge2=edge2; this.texture='steel_grate';
+    this.p1=b1.connectorPos(edge1,floor); this.p2=b2.connectorPos(edge2,floor);
+  }
+}
+class NavigationGraph{
+  constructor(){ this.nodes=new Map(); this.edges=new Map(); }
+  key(p){ return Math.round(p.x)+'|'+Math.round(p.y)+'|'+Math.round(p.z); }
+  addNode(p){ const k=this.key(p); if(!this.nodes.has(k)) this.nodes.set(k,{pos:{x:p.x,y:p.y,z:p.z}}); return k; }
+  _push(ka,kb,cost,type){ if(!this.edges.has(ka)) this.edges.set(ka,[]); this.edges.get(ka).push({to:kb,cost,type}); }
+  addEdge(a,b,type){
+    const ka=this.addNode(a), kb=this.addNode(b);
+    const dx=a.x-b.x, dy=a.y-b.y, dz=a.z-b.z;
+    let dist=Math.hypot(dx,dz); let cost=dist + Math.abs(dy);
+    if(type==='stairs') cost*=0.85;
+    if(type==='ramp')   cost*=1.10;
+    this._push(ka,kb,cost,type); this._push(kb,ka,cost,type);
+  }
+  neighbors(k){ return this.edges.get(k)||[]; }
+  getEdgeType(a,b){
+    const ka=this.key(a), kb=this.key(b), ns=this.edges.get(ka)||[];
+    for(const e of ns){ if(e.to===kb) return e.type; } return null;
+  }
+  // Dijkstra A* (heuristic 0) from start pos to goal pos, filter can be 'rampsOnly'
+  aStar(startPos, goalPos, filter){
+    const start=this.key(startPos), goal=this.key(goalPos);
+    if(!this.nodes.has(start)) this.addNode(startPos);
+    if(!this.nodes.has(goal))  this.addNode(goalPos);
+    const open=[{k:start,f:0}]; const g=new Map([[start,0]]); const came=new Map();
+    function popLowest(){ let bi=0; for(let i=1;i<open.length;i++) if(open[i].f<open[bi].f) bi=i; return open.splice(bi,1)[0]; }
+    while(open.length){
+      const cur=popLowest().k;
+      if(cur===goal){
+        // reconstruct
+        const path=[]; let k=cur; while(k){ path.push(JSON.parse('['+k.replaceAll('|',',')+']')); k=came.get(k); }
+        path.reverse(); return path.map(a=>({x:a[0],y:a[1],z:a[2]}));
+      }
+      const ns=this.neighbors(cur);
+      for(const e of ns){
+        if(filter==='rampsOnly' && e.type!=='ramp' && e.type!=='bridge') continue;
+        const nd=g.get(cur)+e.cost; const old=g.get(e.to);
+        if(old===undefined || nd<old){
+          came.set(e.to,cur); g.set(e.to,nd);
+          open.push({k:e.to,f:nd});
+        }
+      }
+    }
+    return null;
+  }
+}
+
+// 2D fields
+let GRID_N = Math.floor(WORLD_SIZE/VOXEL);
+let gridBlocked=null, gridTexture=null;
+function alloc2D(){ gridBlocked=Array.from({length:GRID_N},()=>Array(GRID_N).fill(false));
+                    gridTexture=Array.from({length:GRID_N},()=>Array(GRID_N).fill('asphalt')); }
+function worldToCell(x,z){
+  const i=Math.max(0,Math.min(GRID_N-1, Math.floor((x+WORLD_SIZE/2)/VOXEL)));
+  const j=Math.max(0,Math.min(GRID_N-1, Math.floor((z+WORLD_SIZE/2)/VOXEL)));
+  return {i,j};
+}
+function cellToWorld(i,j){ return {x:(i+0.5)*VOXEL - WORLD_SIZE/2, y:0, z:(j+0.5)*VOXEL - WORLD_SIZE/2}; }
+
+// ============================
+// City generation
+// ============================
+let buildings=[], bridges=[], streets=[], graph=null, cityAccessibility=0;
+
+function generateCity(){
+  buildings.length=0; bridges.length=0; streets.length=0; graph=new NavigationGraph();
+  // Buildings
+  for(let i=0;i<BUILDING_GRID;i++){
+    for(let j=0;j<BUILDING_GRID;j++){
+      if(Math.random()>BUILDING_CHANCE) continue;
+      if(Math.random()<PARK_CHANCE) continue;
+      const floors=Math.floor(randRange(MIN_FLOORS,MAX_FLOORS));
+      const maxFoot=CELL_SIZE*0.7, minFoot=CELL_SIZE*0.35;
+      const w=Math.floor(randRange(minFoot,maxFoot)/VOXEL)*VOXEL;
+      const d=Math.floor(randRange(minFoot,maxFoot)/VOXEL)*VOXEL;
+      buildings.push(new Building(i,j,floors,{w,d}));
+    }
+  }
+  // Internal nodes per building
+  for(const b of buildings){
+    for(let f=0; f<b.floors; f++){
+      const center=b.centerOfFloor(f); graph.addNode(center);
+      if(f<b.floors-1){
+        const up=b.centerOfFloor(f+1);
+        graph.addEdge(center,up,'stairs');
+        const rp0=b.connectorPos(b.rampEdge,f), rp1=b.connectorPos(b.rampEdge,f+1);
+        graph.addNode(rp0); graph.addNode(rp1);
+        graph.addEdge(center,rp0,'ramp'); graph.addEdge(rp0,rp1,'ramp'); graph.addEdge(rp1,up,'ramp');
+      }
+      if(f===0){ const entry=b.connectorPos('N',0); graph.addNode(entry); graph.addEdge(center,entry,'ramp'); }
+    }
+  }
+  // Streets grid (ground-level accessible)
+  const streetNode=Array.from({length:BUILDING_GRID},()=>Array(BUILDING_GRID).fill(null));
+  for(let i=0;i<BUILDING_GRID;i++) for(let j=0;j<BUILDING_GRID;j++){ const c=gridToWorld(i,j); streetNode[i][j]=c; graph.addNode(c); }
+  for(let i=0;i<BUILDING_GRID;i++) for(let j=0;j<BUILDING_GRID;j++){
+    if(i+1<BUILDING_GRID){ const a=streetNode[i][j], b=streetNode[i+1][j]; graph.addEdge(a,b,'ramp'); streets.push({a,b,texture:'asphalt'}); }
+    if(j+1<BUILDING_GRID){ const a=streetNode[i][j], b=streetNode[i][j+1]; graph.addEdge(a,b,'ramp'); streets.push({a,b,texture:'asphalt'}); }
+  }
+  for(const b of buildings){ const entry=b.connectorPos('N',0), node=streetNode[b.i][b.j]; if(node){ graph.addEdge(entry,node,'ramp'); streets.push({a:entry,b:node,texture:'asphalt'}); } }
+  // Bridges to neighbors + ensure each building has at least one
+  const byCell=new Map(); for(const b of buildings) byCell.set(b.i+'|'+b.j,b);
+  const dirs=[[1,0],[0,1],[-1,0],[0,-1]];
+  for(const b of buildings){
+    let linked=false;
+    for(const d of dirs){
+      const nb=byCell.get((b.i+d[0])+'|'+(b.j+d[1])); if(!nb) continue;
+      if(Math.random()>SKY_BRIDGE_CHANCE) continue;
+      const floor=Math.floor(Math.min(b.floors,nb.floors)/2);
+      const e1 = d[0]>0?'E': d[0]<0?'W': d[1]>0?'S':'N';
+      const e2 = d[0]>0?'W': d[0]<0?'E': d[1]>0?'N':'S';
+      const p1=b.connectorPos(e1,floor), p2=nb.connectorPos(e2,floor);
+      const br=new Bridge(b,nb,floor,e1,e2); bridges.push(br);
+      graph.addNode(p1); graph.addNode(p2);
+      graph.addEdge(p1,p2,'bridge');
+      graph.addEdge(p1,b.centerOfFloor(floor),'ramp');
+      graph.addEdge(p2,nb.centerOfFloor(floor),'ramp');
+      linked=true;
+    }
+    if(!linked){
+      // connect to nearest
+      let best=null, bestD=Infinity;
+      for(const other of buildings){ if(other===b) continue; const dx=other.x-b.x, dz=other.z-b.z; const d=dx*dx+dz*dz; if(d<bestD){bestD=d; best=other;} }
+      if(best){
+        const dx=best.i-b.i, dz=best.j-b.j;
+        const e1 = Math.abs(dx)>=Math.abs(dz) ? (dx>0?'E':'W') : (dz>0?'S':'N');
+        const e2 = Math.abs(dx)>=Math.abs(dz) ? (dx>0?'W':'E') : (dz>0?'N':'S');
+        const floor=Math.floor(Math.min(b.floors,best.floors)/2);
+        const p1=b.connectorPos(e1,floor), p2=best.connectorPos(e2,floor);
+        const br=new Bridge(b,best,floor,e1,e2); bridges push;br;
+        graph.addNode(p1); graph.addNode(p2); graph.addEdge(p1,p2,'bridge');
+        graph.addEdge(p1,b.centerOfFloor(floor),'ramp'); graph.addEdge(p2,best.centerOfFloor(floor),'ramp');
+      }
+    }
+  }
+}
+
+function assignFloorTexturesAndAccessibility(){
+  for(const b of buildings){ for(let f=0; f<b.floors; f++){ if(!b.floorTextures[f]) b.floorTextures[f]=pickTexture(); } }
+  let areaSum=0, weighted=0;
+  function add(area,texId,bonus){ const sc=(TEXTURE_BY_ID[texId]?.score??0.8)+ (bonus||0); const v=Math.max(0,Math.min(1.1,sc)); weighted+=area*v; areaSum+=area; }
+  for(const b of buildings){ const area=b.footprint.w*b.footprint.d; for(let f=0; f<b.floors; f++){ add(area,b.floorTextures[f], f===0?0.05:0); } }
+  const streetW=VOXEL*2; for(const e of streets){ const len=Math.hypot(e.a.x-e.b.x, e.a.z-e.b.z); add(len*streetW, e.texture||'asphalt', 0.03); }
+  const bridgeW=VOXEL*1.5; for(const br of bridges){ const len=Math.hypot(br.p1.x-br.p2.x, br.p1.z-br.p2.z); add(len*bridgeW, br.texture||'steel_grate', 0.05); }
+  cityAccessibility = Math.round((areaSum?weighted/areaSum:0)*100);
+}
+
+// 2D fields from buildings
+function build2DFields(){
+  alloc2D();
+  for(const b of buildings){
+    const {w,d}=b.footprint, x=b.x, z=b.z;
+    const minI=Math.max(0,Math.min(GRID_N-1, Math.floor((x-w/2 + WORLD_SIZE/2)/VOXEL)));
+    const maxI=Math.max(0,Math.min(GRID_N-1, Math.floor((x+w/2 + WORLD_SIZE/2)/VOXEL)));
+    const minJ=Math.max(0,Math.min(GRID_N-1, Math.floor((z-d/2 + WORLD_SIZE/2)/VOXEL)));
+    const maxJ=Math.max(0,Math.min(GRID_N-1, Math.floor((z+d/2 + WORLD_SIZE/2)/VOXEL)));
+    for(let i=minI;i<=maxI;i++) for(let j=minJ;j<=maxJ;j++){ gridBlocked[i][j]=true; }
+  }
+  for(let i=0;i<GRID_N;i++) for(let j=0;j<GRID_N;j++){ if(!gridTexture[i][j]) gridTexture[i][j]=pickTexture(); }
+}
+
+// ============================
+let bots=[], greenBots=[], orangeBots=[], greenLead=null, orangeLead=null;
+let W=0,H=0, viewRects=[], viewRectsGL=[];
+let orbitYaw=0.7, orbitPitch=-0.5, orbitDist=WORLD_SIZE*0.9;
+let dragging=false,lastX=0,lastY=0;
+let goal=null;
+let scores={green:0,orange:0,ties:0,rounds:0}, lastWinner='-';
+let _hud=null;
+
+function supportYAt(bot){ return 0; }
+function surfaceTextureAt(bot){
+  const pos=bot.pos;
+  if(MODE_2D){
+    const c=worldToCell(pos.x,pos.z);
+    return gridTexture[c.i][c.j] || 'asphalt';
+  }else{
+    // nearest building
+    let best=null, bestD=Infinity;
+    for(const b of buildings){
+      const dx=b.x-pos.x, dz=b.z-pos.z; const d=dx*dx+dz*dz; if(d<bestD){ bestD=d; best=b; }
+    }
+    if(!best) return 'asphalt';
+    const f=Math.min(best.floors-1, Math.max(0, Math.round(pos.y/VOXEL)));
+    return best.floorTextures[f] || 'polished_concrete';
+  }
+}
+
+// Trails
+function botCount(){ return bots.length; }
+function trailsMinDist(){ return botCount()<10 ? TRAIL_MIN_DIST : TRAIL_MIN_DIST*Math.min(6,1+botCount()/50); }
+function shouldCapTrails(){ return botCount()>=10; }
+function sampleTrails(){
+  const minDist=trailsMinDist()/Math.sqrt(Math.max(1, TIME_SCALE||1));
+  for(const b of bots){
+    const hd=Math.atan2(b.dir.z,b.dir.x);
+    const p={x:b.pos.x, y:0.5, z:b.pos.z, _hdg:hd};
+    const tr=b.trail;
+    if(tr.length){
+      const last=tr[tr.length-1];
+      const dx=p.x-last.x, dz=p.z-last.z;
+      const d=Math.hypot(dx,dz);
+      const dH=Math.abs(angleDiff(hd, last._hdg||hd));
+      if(d<minDist && dH<0.08) continue;
+    }
+    tr.push(p);
+    if(shouldCapTrails() && tr.length>TRAIL_MAX_POINTS) tr.splice(0,tr.length-TRAIL_MAX_POINTS);
+  }
+}
+function clearTrails(){ for(const b of bots){ b.trail.length=0; } }
+
+// Bots
+class Bot{
+  constructor(color){ this.color=color; this.rgb=hexToRGB(color); this.type='bot';
+    this.pos={x:0,y:0,z:0}; this.dir={x:1,y:0,z:0}; this.height=VOXEL*0.6;
+    this.speed=BOT_SPEED; this.turnRate=1.5; this.path=[]; this.pathIndex=0; this.segTypes=[];
+    this.fatigue=0; this.fatigueRate=1/300; this.isResting=false; this.restTimer=0; this.restDuration=15;
+    this.trail=[]; this.camPhase=0; this.camY=0;
+  }
+  setStart(p){ this.pos={x:p.x,y:p.y,z:p.z}; }
+  setPath(path,segTypes){ this.path=path||[]; this.segTypes=segTypes||[]; this.pathIndex=0; }
+  target(){ return this.path[this.pathIndex]||null; }
+  atTarget(t){ const dx=this.pos.x-t.x, dy=this.pos.y-t.y, dz=this.pos.z-t.z; return (dx*dx+dy*dy+dz*dz) < (VOXEL*VOXEL*0.25); }
+  update(dt){
+    if(this.isResting){ this.restTimer-=dt; this.camPhase+=dt*0.6; this.camY=Math.sin(this.camPhase)*VOXEL*0.01; if(this.restTimer<=0){ this.isResting=false; this.fatigue=0; } return; }
+    const t=this.target(); if(!t) return;
+    const dx=t.x-this.pos.x, dz=t.z-this.pos.z;
+    const distXZ=Math.max(0.001, Math.hypot(dx,dz));
+    const desired=Math.atan2(dz,dx);
+    const current=Math.atan2(this.dir.z,this.dir.x);
+    let dtheta=angleDiff(desired,current);
+    const maxTurn=this.turnRate*dt;
+    if(dtheta>maxTurn)dtheta=maxTurn; else if(dtheta<-maxTurn)dtheta=-maxTurn;
+    const nh=current+dtheta, cosH=Math.cos(nh), sinH=Math.sin(nh);
+    this.dir.x=cosH; this.dir.z=sinH;
+    const arrive=Math.min(1, Math.max(0.3, distXZ/(VOXEL*2)));
+    const step=this.speed*dt*arrive;
+    this.pos.x+=cosH*step; this.pos.z+=sinH*step;
+    this.pos.y=0; // keep grounded
+    if(this.atTarget(t)) this.pathIndex=Math.min(this.pathIndex+1, this.path.length-1);
+    this.camPhase+=(step/VOXEL)*2.5; this.camY=Math.sin(this.camPhase)*VOXEL*0.03;
+    const effort=0.6+0.4*arrive; this.fatigue+=dt*this.fatigueRate*effort; if(this.fatigue>=1){ this.isResting=true; this.restTimer=this.restDuration*(0.9+Math.random()*0.2); }
+  }
+}
+
+class GreenBot extends Bot{
+  constructor(){ super('#7CFF6B'); this.type='green'; this.speed=BOT_SPEED*0.90; this.turnRate=1.5; this.fatigueRate=1/250; this.restDuration=20; this.roll=0; }
+  update(dt){
+    if(this.isResting){ this.restTimer-=dt; this.camPhase+=dt*0.6; this.camY=Math.sin(this.camPhase)*VOXEL*0.01; if(this.restTimer<=0){ this.isResting=false; this.fatigue=0; } return; }
+    const t=this.target(); if(!t) return;
+    const texId=surfaceTextureAt(this);
+    const score=(TEXTURE_BY_ID[texId]?.score ?? 0.8);
+    // steering noise & bias (easier left than right)
+    const dx=t.x-this.pos.x, dz=t.z-this.pos.z;
+    const desired=Math.atan2(dz,dx);
+    const current=Math.atan2(this.dir.z,this.dir.x);
+    let dtheta=angleDiff(desired,current);
+    dtheta += dtheta*0.10*(Math.random()*2-1); // 10% less accurate
+    const bias = dtheta>0 ? 1.25 : 0.85; // left vs right
+    const turnMul = 0.75 * (0.55 + 0.55*score); // worse on poor surfaces
+    const maxTurn=this.turnRate*turnMul*bias*dt;
+    if(dtheta>maxTurn)dtheta=maxTurn; else if(dtheta<-maxTurn)dtheta=-maxTurn;
+    const nh=current+dtheta; let cosH=Math.cos(nh), sinH=Math.sin(nh);
+    // wobble & asym lateral sway
+    this.camPhase += dt*2.6*(1.0+(1.2-score));
+    const wob = Math.sin(this.camPhase)*0.25;
+    const cur2 = Math.atan2(sinH,cosH)+ wob*dt;
+    cosH=Math.cos(cur2); sinH=Math.sin(cur2);
+    this.dir.x=cosH; this.dir.z=sinH;
+    const arrive=Math.min(1, Math.max(0.3, Math.hypot(dx,dz)/(VOXEL*2)));
+    const baseSpeed=BOT_SPEED*0.90*(0.65 + 0.50*score);
+    const step=baseSpeed*dt*arrive;
+    this.pos.x+=cosH*step; this.pos.z+=sinH*step;
+    // lateral limp
+    const sideX=-sinH, sideZ=cosH; const sway=Math.sin(this.camPhase*2.0)*VOXEL*0.30*dt*(1.0+(1.2-score));
+    this.pos.x+=sideX*sway; this.pos.z+=sideZ*sway;
+    this.pos.y=0;
+    if(this.atTarget(t)) this.pathIndex=Math.min(this.pathIndex+1, this.path.length-1);
+    // fatigue
+    const effort=0.6+0.4*arrive; this.fatigue+=dt*this.fatigueRate*effort; if(this.fatigue>=1){ this.isResting=true; this.restTimer=20*(0.9+Math.random()*0.2); }
+  }
+}
+class OrangeBot extends Bot{ constructor(){ super('#FFA84B'); this.type='orange'; this.speed=BOT_SPEED*1.00; this.fatigueRate=1/300; this.restDuration=15; } }
+
+// Path helpers
+function nearestGraphPos(p){
+  let best=null, bestD=Infinity;
+  for(const {pos} of graph.nodes.values()){ const dx=p.x-pos.x, dy=p.y-pos.y, dz=p.z-pos.z; const d=dx*dx+dy*dy+dz*dz; if(d<bestD){bestD=d; best=pos;} }
+  return best||p;
+}
+function segmentTypesForPath(path){
+  const types=[]; if(!path) return types; for(let i=0;i<path.length-1;i++){ types.push(graph.getEdgeType(path[i],path[i+1])||null); } return types;
+}
+
+// 2D A* (tile costs for green; orange ignores obstacles/costs)
+function aStar2D(startIJ, goalIJ, forGreen){
+  const key=(i,j)=>i+'|'+j;
+  const open=[], g={}, f={}, ins={};
+  const sk=key(startIJ.i,startIJ.j), gk=key(goalIJ.i,goalIJ.j);
+  g[sk]=0; f[sk]=Math.hypot(goalIJ.i-startIJ.i, goalIJ.j-startIJ.j);
+  open.push({k:sk,i:startIJ.i,j:startIJ.j,f:f[sk]}); ins[sk]=true;
+  function popLowest(){ let bi=0; for(let i=1;i<open.length;i++) if(open[i].f<open[bi].f) bi=i; const it=open.splice(bi,1)[0]; delete ins[it.k]; return it; }
+  function stepFactor(i,j){
+    if(!forGreen) return 1; // orange ignores texture/obstacles cost
+    const texId=gridTexture[i][j]; const sc=(TEXTURE_BY_ID[texId]?.score ?? 0.8);
+    const w=1.0/Math.max(0.2, Math.min(1.0, sc));
+    return w;
+  }
+  const came = {};
+  while(open.length){
+    const cur=popLowest();
+    if(cur.k===gk){
+      const path=[]; let ck=cur.k;
+      while(ck){ const [ci,cj]=ck.split('|').map(n=>parseInt(n,10)); path.push(cellToWorld(ci,cj)); ck=came[ck]; }
+      path.reverse(); return path;
+    }
+    for(let di=-1;di<=1;di++) for(let dj=-1;dj<=1;dj++){
+      if(di===0&&dj===0) continue;
+      const ni=cur.i+di, nj=cur.j+dj;
+      if(ni<0||nj<0||ni>=GRID_N||nj>=GRID_N) continue;
+      if(forGreen && gridBlocked[ni][nj]) continue;
+      const nk=key(ni,nj);
+      const base=Math.hypot(di,dj), w=stepFactor(ni,nj);
+      const ng=(g[cur.k]||Infinity) + base*w;
+      if(g[nk]===undefined || ng<g[nk]){
+        came[nk]=cur.k; g[nk]=ng; f[nk]=ng + Math.hypot(goalIJ.i-ni, goalIJ.j-nj);
+        if(!ins[nk]){ open.push({k:nk,i:ni,j:nj,f:f[nk]}); ins[nk]=true; }
+      }
+    }
+  }
+  return null;
+}
+
+// Goals & planning
+function pickRandomGoal(){
+  if(MODE_2D){
+    // 2D goal on open tile
+    for(let tries=0; tries<2000; tries++){
+      const i=(Math.random()*GRID_N)|0, j=(Math.random()*GRID_N)|0;
+      if(!gridBlocked[i][j]) return {pos:cellToWorld(i,j), floor:0, buildingIndex:-1};
+    }
+    return {pos:cellToWorld(0,0), floor:0, buildingIndex:-1};
+  }else{
+    if(buildings.length===0) return null;
+    const bi=(Math.random()*buildings.length)|0; const b=buildings[bi];
+    const floor=(Math.random()*b.floors)|0; return {pos:b.centerOfFloor(floor), floor, buildingIndex:bi};
+  }
+}
+
+function planPaths(){
+  if(MODE_2D){
+    const goalIJ=worldToCell(goal.pos.x, goal.pos.z);
+    for(const gb of greenBots){
+      const start=worldToCell(gb.pos.x, gb.pos.z);
+      const p=aStar2D(start, goalIJ, true);
+      gb.setPath(p,[]);
+    }
+    for(const ob of orangeBots){
+      const start=worldToCell(ob.pos.x, ob.pos.z);
+      const p=aStar2D(start, goalIJ, false);
+      ob.setPath(p,[]);
+    }
+  }else{
+    const bGoal = goal.buildingIndex>=0 ? buildings[goal.buildingIndex] : null;
+    if(bGoal){ graph.addNode(goal.pos); graph.addEdge(bGoal.centerOfFloor(goal.floor), goal.pos, 'ramp'); }
+    for(const gb of greenBots){
+      const start=nearestGraphPos(gb.pos);
+      const p=graph.aStar(start, goal.pos, 'rampsOnly'); gb.setPath(p, segmentTypesForPath(p));
+    }
+    for(const ob of orangeBots){
+      const start=nearestGraphPos(ob.pos);
+      const p=graph.aStar(start, goal.pos, null); ob.setPath(p, segmentTypesForPath(p));
+    }
+  }
+}
+
+// Capture & respawn
+let captureLock=false;
+function checkGoalCapture(){
+  if(!goal || captureLock) return;
+  const g=goal.pos, r2=(VOXEL*0.8)**2;
+  let greenHit=false, orangeHit=false;
+  for(const b of bots){
+    const dx=b.pos.x-g.x, dz=b.pos.z-g.z; const d=dx*dx+dz*dz;
+    if(d<=r2){ if(b.type==='green') greenHit=true; if(b.type==='orange') orangeHit=true; }
+  }
+  if(greenHit || orangeHit){
+    captureLock=true;
+    if(greenHit && !orangeHit) { scores.green++; lastWinner='green'; }
+    else if(orangeHit && !greenHit) { scores.orange++; lastWinner='orange'; }
+    else { scores.ties++; lastWinner='tie'; }
+    scores.rounds++;
+    goal=pickRandomGoal(); planPaths();
+    setTimeout(()=>{ captureLock=false; }, 30);
+  }
+}
+
+// Build bots
+function rebuildBots(){
+  bots.length=0; greenBots.length=0; orangeBots.length=0;
+  const ng=Math.max(0, Math.floor(+document.getElementById('numGreen').value||0));
+  const no=Math.max(0, Math.floor(+document.getElementById('numOrange').value||0));
+  for(let i=0;i<ng;i++){ const b=new GreenBot(); b.pos=randomStartPos(); b.trail=[]; greenBots.push(b); bots.push(b); }
+  for(let j=0;j<no;j++){ const b=new OrangeBot(); b.pos=randomStartPos(); b.trail=[]; orangeBots.push(b); bots.push(b); }
+  greenLead=greenBots[0]||null; orangeLead=orangeBots[0]||null;
+}
+
+function randomStartPos(){
+  if(MODE_2D){
+    for(let tries=0; tries<500; tries++){
+      const i=(Math.random()*GRID_N)|0, j=(Math.random()*GRID_N)|0;
+      if(!gridBlocked[i][j]) return cellToWorld(i,j);
+    }
+    return cellToWorld(0,0);
+  }else{
+    const b=choice(buildings); const f=(Math.random()*b.floors)|0; return b.centerOfFloor(f);
+  }
+}
+
+// ============================
+// Setup & loop
+// ============================
+let W=0,H=0, _hud=null;
+let viewRects=[], viewRectsGL=[];
+let orbitYaw=0.7, orbitPitch=-0.5, orbitDist=WORLD_SIZE*0.9;
+let dragging=false,lastX=0,lastY=0;
+
+function setup(){
+  W=window.innerWidth; H=window.innerHeight; createCanvas(W,H,WEBGL); frameRate(FRAME_RATE);
+  computeViewRects();
+  _hud = createGraphics(W,H); _hud.pixelDensity(1);
+
+  // UI wiring
+  document.getElementById('timeBadge').onclick = toggleTime;
+  document.getElementById('modeBadge').onclick = ()=>{ MODE_2D=!MODE_2D; updateModeBadge(); newScenario(); };
+  document.getElementById('numGreen').addEventListener('change', ()=>{ rebuildBots(); planPaths(); });
+  document.getElementById('numOrange').addEventListener('change', ()=>{ rebuildBots(); planPaths(); });
+
+  // Block Space default page scroll
+  window.addEventListener('keydown', (e)=>{ if(e.code==='Space'){ e.preventDefault(); } }, {passive:false});
+
+  newScenario();
+  updateTimeBadge();
+  updateModeBadge();
+}
+function newScenario(){
+  generateCity(); assignFloorTexturesAndAccessibility();
+  build2DFields();
+  rebuildBots();
+  goal=pickRandomGoal();
+  planPaths();
+  clearTrails();
+}
+function windowResized(){ W=window.innerWidth; H=window.innerHeight; resizeCanvas(W,H); computeViewRects(); if(_hud){ _hud.resizeCanvas(W,H); } }
+
+function computeViewRects(){
+  viewRects=[
+    {x:0,   y:0,   w:W/2, h:H/2}, // 1 Iso
+    {x:W/2, y:0,   w:W/2, h:H/2}, // 2 Top-down
+    {x:0,   y:H/2, w:W/2, h:H/2}, // 3 Follow Green
+    {x:W/2, y:H/2, w:W/2, h:H/2}, // 4 Follow Orange
+  ];
+  // p5 WEBGL viewport origin is bottom-left; map rects accordingly
+  viewRectsGL=[
+    {x:0,   y:H/2, w:W/2, h:H/2},
+    {x:W/2, y:H/2, w:W/2, h:H/2},
+    {x:0,   y:0,   w:W/2, h:H/2},
+    {x:W/2, y:0,   w:W/2, h:H/2},
+  ];
+}
+function setViewport(i){
+  const r=viewRects[i], vr=viewRectsGL[i];
+  const gl=drawingContext; const dpr=(window.devicePixelRatio||1);
+  gl.viewport(vr.x*dpr, vr.y*dpr, vr.w*dpr, vr.h*dpr);
+  gl.enable(gl.SCISSOR_TEST);
+  gl.scissor(vr.x*dpr, vr.y*dpr, vr.w*dpr, vr.h*dpr);
+  gl.clearColor(12/255,12/255,12/255,1.0);
+  gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
+  perspective(Math.PI/3, r.w/r.h, 1, WORLD_SIZE*4);
+}
+function endViewport(){ const gl=drawingContext; const dpr=(window.devicePixelRatio||1); gl.viewport(0,0,width*dpr,height*dpr); gl.disable(gl.SCISSOR_TEST); }
+
+function orbitView(){
+  const r=viewRects[0];
+  if(mouseIsPressed){
+    if(mouseX>=r.x && mouseX<r.x+r.w && mouseY>=r.y && mouseY<r.y+r.h){
+      if(!dragging){ dragging=true; lastX=mouseX; lastY=mouseY; }
+      const dx=(mouseX-lastX)/r.w, dy=(mouseY-lastY)/r.h;
+      orbitYaw += dx*2*Math.PI; orbitPitch = constrain(orbitPitch + dy*Math.PI, -1.2, 0.2);
+      lastX=mouseX; lastY=mouseY;
+    }
+  }else dragging=false;
+  const cx=0, cy=MODE_2D? (WORLD_SIZE*0.02) : (WORLD_SIZE*0.15), cz=0;
+  const ex=cx + orbitDist*Math.cos(orbitPitch)*Math.cos(orbitYaw);
+  const ey=cy + orbitDist*Math.sin(orbitPitch);
+  const ez=cz + orbitDist*Math.cos(orbitPitch)*Math.sin(orbitYaw);
+  camera(ex,ey,ez, cx,cy,cz, 0,1,0);
+}
+
+let camState={};
+function botCamera(bot){
+  const id=bot.type+(bot===greenLead?'Lead':'Any');
+  const fX=bot.dir.x, fZ=bot.dir.z;
+  const baseY=0;
+  const eye={x:bot.pos.x, y:baseY+bot.height+bot.camY, z:bot.pos.z};
+  const center={x:bot.pos.x+fX*VOXEL*6, y:baseY+bot.height+bot.camY, z:bot.pos.z+fZ*VOXEL*6};
+  if(!camState[id]) camState[id]={eye:{...eye},center:{...center}};
+  const a=0.15;
+  camState[id].eye.x += (eye.x-camState[id].eye.x)*a;
+  camState[id].eye.y += (eye.y-camState[id].eye.y)*a;
+  camState[id].eye.z += (eye.z-camState[id].eye.z)*a;
+  camState[id].center.x += (center.x-camState[id].center.x)*a;
+  camState[id].center.y += (center.y-camState[id].center.y)*a;
+  camState[id].center.z += (center.z-camState[id].center.z)*a;
+  camera(camState[id].eye.x,camState[id].eye.y,camState[id].eye.z,
+         camState[id].center.x,camState[id].center.y,camState[id].center.z,
+         0,1,0);
+}
+
+// ============================
+// Draw
+// ============================
+function draw(){
+  background(12);
+  // step sim with fixed substeps for 10x
+  let dtReal=(deltaTime/1000)*(paused?0:TIME_SCALE), remaining=dtReal, MAX_STEP=1/120;
+  while(remaining>0){ const step=Math.min(MAX_STEP,remaining); for(const b of bots) b.update(step); remaining-=step; }
+  checkGoalCapture();
+  sampleTrails();
+
+  // 1) Iso
+  push(); setViewport(0); orbitView();
+  drawCityWireframe({nearOnly:false, drawInteriors:!MODE_2D, groundGridStep:VOXEL*10});
+  drawTrails3D({nearOnly:false});
+  drawGoalMarker(); drawBots3D(false);
+  pop(); endViewport();
+
+  // 2) Top-down world
+  push(); setViewport(1); drawTopDown(); pop(); endViewport();
+
+  // 3) Follow Green (top-down)
+  push(); setViewport(2); drawTopDownFollow(greenLead||greenBots[0]||bots[0]); pop(); endViewport();
+
+  // 4) Follow Orange (top-down)
+  push(); setViewport(3); drawTopDownFollow(orangeLead||orangeBots[0]||bots[0]); pop(); endViewport();
+
+  drawSplitOverlay();
+}
+
+// ============================
+// Drawing helpers
+// ============================
+function drawCityWireframe(opts){
+  opts=opts||{};
+  const nearOnly=!!opts.nearOnly, origin=opts.origin||{x:0,z:0}, radius=opts.radius||Infinity;
+  const r2=radius*radius;
+  // ground grid
+  const step=opts.groundGridStep||0;
+  if(step>0){ stroke(28); for(let x=-WORLD_SIZE/2;x<=WORLD_SIZE/2;x+=step){ line(x,0,-WORLD_SIZE/2, x,0,WORLD_SIZE/2); } for(let z=-WORLD_SIZE/2;z<=WORLD_SIZE/2;z+=step){ line(-WORLD_SIZE/2,0,z, WORLD_SIZE/2,0,z); } }
+  // streets
+  stroke(100); for(const e of streets){
+    if(nearOnly){ const da=(e.a.x-origin.x)**2+(e.a.z-origin.z)**2; const db=(e.b.x-origin.x)**2+(e.b.z-origin.z)**2; if(da>r2 && db>r2) continue; }
+    line(e.a.x,0.2,e.a.z, e.b.x,0.2,e.b.z);
+  }
+  // buildings
+  for(const b of buildings){
+    const w=b.footprint.w, d=b.footprint.d, h=(b.floors-1)*VOXEL, x=b.x, z=b.z;
+    if(nearOnly){ const dx=x-origin.x, dz=z-origin.z; if(dx*dx+dz*dz>r2) continue; }
+    // wireframe box
+    stroke(180); noFill();
+    line(x-w/2,0,z-d/2, x+w/2,0,z-d/2); line(x+w/2,0,z-d/2, x+w/2,0,z+d/2);
+    line(x+w/2,0,z+d/2, x-w/2,0,z+d/2); line(x-w/2,0,z+d/2, x-w/2,0,z-d/2);
+    line(x-w/2,0,z-d/2, x-w/2,h,z-d/2); line(x+w/2,0,z-d/2, x+w/2,h,z-d/2);
+    line(x+w/2,0,z+d/2, x+w/2,h,z+d/2); line(x-w/2,0,z+d/2, x-w/2,h,z+d/2);
+    line(x-w/2,h,z-d/2, x+w/2,h,z-d/2); line(x+w/2,h,z-d/2, x+w/2,h,z+d/2);
+    line(x+w/2,h,z+d/2, x-w/2,h,z+d/2); line(x-w/2,h,z+d/2, x-w/2,h,z-d/2);
+    // faint solid
+    noStroke(); fill(255,255,255, BUILDING_SURFACE_ALPHA); push(); translate(x,0,z); box(w,h,d); pop();
+    // interior floors (3D only)
+    if(opts.drawInteriors && !MODE_2D){ noFill(); stroke(90,90,90,180); for(let y=0;y<=h;y+=VOXEL){ line(x-w/2,y,z-d/2, x+w/2,y,z-d/2); line(x+w/2,y,z-d/2, x+w/2,y,z+d/2); line(x+w/2,y,z+d/2, x-w/2,y,z+d/2); line(x-w/2,y,z+d/2, x-w/2,y,z-d/2); } }
+  }
+  // bridges (only in 3D mode)
+  if(!MODE_2D){ stroke(140); for(const br of bridges){ const p1=br.p1, p2=br.p2; line(p1.x,p1.y,p1.z, p2.x,p2.y,p2.z); } }
+}
+
+function drawBots3D(isFPV){
+  for(const b of bots){
+    if(isFPV && b===greenLead) continue; // hide green in its own FPV (not used here)
+    push(); translate(b.pos.x, b.height*0.5, b.pos.z);
+      noFill(); stroke(220,220,220,70); box(VOXEL*0.8,b.height,VOXEL*0.8);
+      const rc=b.rgb.r,gc=b.rgb.g,bc=b.rgb.b;
+      fill(rc,gc,bc,76); noStroke(); box(VOXEL*0.5,b.height*0.9,VOXEL*0.5);
+      stroke(rc,gc,bc); noFill(); box(VOXEL*0.5,b.height*0.9,VOXEL*0.5);
+      // small circular 'head' (10× smaller)
+      const headR=VOXEL*0.10;
+      const hx=b.dir.x*VOXEL*0.18, hz=b.dir.z*VOXEL*0.18;
+      push(); translate(hx, b.height*0.5 + headR*0.9, hz);
+        noStroke(); fill(rc,gc,bc,210); sphere(headR);
+        noFill(); stroke(rc,gc,bc,255); strokeWeight(1);
+        rotateX(Math.PI/2); torus(headR, headR*0.03, 14, 8);
+      pop();
+    pop();
+  }
+}
+
+function drawGoalMarker(){
+  if(!goal) return;
+  const g=goal.pos;
+  stroke(150,220,255);
+  line(g.x-VOXEL,0.4,g.z-VOXEL, g.x+VOXEL,0.4,g.z+VOXEL);
+  line(g.x-VOXEL,0.4,g.z+VOXEL, g.x+VOXEL,0.4,g.z-VOXEL);
+}
+
+// Trails renderer: in 2D mode, lines-only to avoid white slab
+function drawTrails3D(opts){
+  opts=opts||{}; const nearOnly=!!opts.nearOnly; const origin=opts.origin||{x:0,z:0}; const radius=opts.radius||Infinity; const r2=radius*radius;
+  const decim = MODE_2D ? 2 : 1;
+  // core lines
+  blendMode(BLEND);
+  strokeWeight(MODE_2D ? 2 : 3);
+  for(const b of bots){
+    const tr=b.trail; if(!tr || tr.length<2) continue;
+    stroke(b.rgb.r,b.rgb.g,b.rgb.b, 220);
+    beginShape(LINES);
+    for(let j=1;j<tr.length;j+=decim){
+      const a=tr[j-1], d=tr[j];
+      if(nearOnly){
+        const da=(a.x-origin.x)**2+(a.z-origin.z)**2;
+        const db=(d.x-origin.x)**2+(d.z-origin.z)**2;
+        if(da>r2 && db>r2) continue;
+      }
+      const yA = MODE_2D ? 0.48 : (a.y + 2);
+      const yB = MODE_2D ? 0.48 : (d.y + 2);
+      vertex(a.x,yA,a.z); vertex(d.x,yB,d.z);
+    }
+    endShape();
+  }
+  // halo only in 3D
+  if(!MODE_2D){
+    strokeWeight(6);
+    for(const b of bots){
+      const tr=b.trail; if(!tr || tr.length<2) continue;
+      stroke(b.rgb.r,b.rgb.g,b.rgb.b, 60);
+      beginShape(LINES);
+      for(let j=1;j<tr.length;j++){
+        const a=tr[j-1], d=tr[j];
+        vertex(a.x,a.y+2,a.z); vertex(d.x,d.y+2,d.z);
+      }
+      endShape();
+    }
+    strokeWeight(1);
+  }
+}
+
+function drawTopDown(){
+  ortho(-WORLD_SIZE/2, WORLD_SIZE/2, WORLD_SIZE/2, -WORLD_SIZE/2, 1, WORLD_SIZE*4);
+  camera(0, WORLD_SIZE*2, 0, 0, 0, 0, 0, 0, -1);
+  // grid
+  stroke(28); for(let x=-WORLD_SIZE/2; x<=WORLD_SIZE/2; x+=CELL_SIZE){ line(x,0,-WORLD_SIZE/2, x,0,WORLD_SIZE/2); }
+  for(let z=-WORLD_SIZE/2; z<=WORLD_SIZE/2; z+=CELL_SIZE){ line(-WORLD_SIZE/2,0,z, WORLD_SIZE/2,0,z); }
+  // streets
+  stroke(100); for(const e of streets){ line(e.a.x,0.2,e.a.z, e.b.x,0.2,e.b.z); }
+  // buildings outline
+  stroke(180); for(const b of buildings){ const w=b.footprint.w, d=b.footprint.d, x=b.x, z=b.z;
+    line(x-w/2,0.2,z-d/2, x+w/2,0.2,z-d/2); line(x+w/2,0.2,z-d/2, x+w/2,0.2,z+d/2);
+    line(x+w/2,0.2,z+d/2, x-w/2,0.2,z+d/2); line(x-w/2,0.2,z+d/2, x-w/2,0.2,z-d/2);
+  }
+  if(!MODE_2D){ stroke(140); for(const br of bridges){ line(br.p1.x,0.3,br.p1.z, br.p2.x,0.3,br.p2.z); } }
+  drawTrails3D({nearOnly:false});
+  // heads
+  const headR=VOXEL*0.10;
+  for(const b of bots){ push(); translate(b.pos.x,0.55,b.pos.z); noStroke(); fill(b.rgb.r,b.rgb.g,b.rgb.b,230); sphere(headR); pop(); }
+}
+
+function drawTopDownFollow(bot){
+  if(!bot){ return; }
+  const R=FOLLOW_R; const bx=bot.pos.x, bz=bot.pos.z;
+  ortho(-R, R, R, -R, 1, WORLD_SIZE*4);
+  camera(bx, WORLD_SIZE*2, bz, bx, 0, bz, 0, 0, -1);
+  // local grid
+  const step=CELL_SIZE;
+  stroke(28);
+  for(let x=Math.floor((bx-R)/step)*step; x<=Math.ceil((bx+R)/step)*step; x+=step){ line(x,0,bz-R, x,0,bz+R); }
+  for(let z=Math.floor((bz-R)/step)*step; z<=Math.ceil((bz+R)/step)*step; z+=step){ line(bx-R,0,z, bx+R,0,z); }
+  // nearby streets
+  stroke(100);
+  for(const e of streets){
+    const minx=Math.min(e.a.x,e.b.x), maxx=Math.max(e.a.x,e.b.x);
+    const minz=Math.min(e.a.z,e.b.z), maxz=Math.max(e.a.z,e.b.z);
+    if(maxx<bx-R||minx>bx+R||maxz<bz-R||minz>bz+R) continue;
+    line(e.a.x,0.2,e.a.z, e.b.x,0.2,e.b.z);
+  }
+  // nearby buildings
+  stroke(180); for(const b2 of buildings){
+    const x=b2.x, z=b2.z, w=b2.footprint.w, d=b2.footprint.d;
+    if(x+w/2<bx-R||x-w/2>bx+R||z+d/2<bz-R||z-d/2>bz+R) continue;
+    line(x-w/2,0.2,z-d/2, x+w/2,0.2,z-d/2); line(x+w/2,0.2,z-d/2, x+w/2,0.2,z+d/2);
+    line(x+w/2,0.2,z+d/2, x-w/2,0.2,z+d/2); line(x-w/2,0.2,z+d/2, x-w/2,0.2,z-d/2);
+  }
+  if(!MODE_2D){ stroke(140); for(const br of bridges){ const p1=br.p1, p2=br.p2; if(Math.abs(p1.x-bx)>R&&Math.abs(p2.x-bx)>R) continue; line(p1.x,0.3,p1.z, p2.x,0.3,p2.z);} }
+  drawTrails3D({nearOnly:true, origin:{x:bx,z:bz}, radius:R});
+  // heads near
+  const headR=VOXEL*0.10;
+  for(const b3 of bots){
+    const dx=b3.pos.x-bx, dz=b3.pos.z-bz; if(dx*dx+dz*dz>R*R) continue;
+    push(); translate(b3.pos.x, 0.55, b3.pos.z); noStroke(); fill(b3.rgb.r,b3.rgb.g,b3.rgb.b,230); sphere(headR); pop();
+  }
+}
+
+function drawSplitOverlay(){
+  if(!_hud){ _hud=createGraphics(W,H); _hud.pixelDensity(1); }
+  const g=_hud; g.clear();
+  if(SPLIT_BORDER_ON){
+    g.noFill(); g.stroke(60); g.strokeWeight(1.5);
+    g.line(g.width/2,0, g.width/2,g.height);
+    g.line(0,g.height/2, g.width,g.height/2);
+    g.rect(0,0,g.width/2,g.height/2);
+    g.rect(g.width/2,0,g.width/2,g.height/2);
+    g.rect(0,g.height/2,g.width/2,g.height/2);
+    g.rect(g.width/2,g.height/2,g.width/2,g.height/2);
+  }
+  // Hud stats (bottom-left)
+  g.noStroke(); g.fill(200); g.textSize(12);
+  const gLead = greenLead||greenBots[0];
+  const oLead = orangeLead||orangeBots[0];
+  const hud1 = `Green ${gLead?Math.floor(gLead.fatigue*100):'-'}%${gLead&&gLead.isResting?' (rest)':''} • Orange ${oLead?Math.floor(oLead.fatigue*100):'-'}%${oLead&&oLead.isResting?' (rest)':''}`;
+  const hud2 = `Score G:${scores.green} O:${scores.orange} Ties:${scores.ties} Rounds:${scores.rounds} Last:${lastWinner} • Access:${cityAccessibility}`;
+  g.text(hud1, 14, g.height-34);
+  g.text(hud2, 14, g.height-16);
+  resetMatrix(); image(g, -width/2, -height/2, width, height);
+}
+
+// ============================
+// Exports (1–4 full, 5–8 trails-only)
+// ============================
+const EXPORT_SIZE = 10000;
+function exportViewPNG(viewIndex, trailsOnly){
+  // capture a single view by temporarily resizing
+  const prevW=width, prevH=height, prevDensity = pixelDensity();
+  try{ pixelDensity(1); }catch(e){}
+  resizeCanvas(EXPORT_SIZE, EXPORT_SIZE);
+  computeViewRects();
+  background(12);
+
+  // render requested view fullscreen in slot 0
+  if(viewIndex===1){ // iso
+    push(); setViewport(0);
+    const cx=0,cy=MODE_2D?WORLD_SIZE*0.02:WORLD_SIZE*0.15,cz=0;
+    const ex=cx + orbitDist*Math.cos(orbitPitch)*Math.cos(orbitYaw);
+    const ey=cy + orbitDist*Math.sin(orbitPitch);
+    const ez=cz + orbitDist*Math.cos(orbitPitch)*Math.sin(orbitYaw);
+    camera(ex,ey,ez,cx,cy,cz,0,1,0);
+    if(!trailsOnly) drawCityWireframe({nearOnly:false, drawInteriors:!MODE_2D, groundGridStep:VOXEL*10});
+    drawTrails3D({nearOnly:false});
+    pop(); endViewport();
+  }else if(viewIndex===2){ // top-down world
+    push(); setViewport(0);
+    ortho(-WORLD_SIZE/2, WORLD_SIZE/2, WORLD_SIZE/2,-WORLD_SIZE/2, 1, WORLD_SIZE*4);
+    camera(0, WORLD_SIZE*2, 0, 0, 0, 0, 0, 0, -1);
+    if(!trailsOnly) drawTopDown(); else drawTrails3D({nearOnly:false});
+    pop(); endViewport();
+  }else if(viewIndex===3){ // follow green
+    const b=greenLead||greenBots[0]||bots[0]; const R=FOLLOW_R;
+    push(); setViewport(0);
+    ortho(-R,R,R,-R,1,WORLD_SIZE*4); camera(b.pos.x, WORLD_SIZE*2, b.pos.z, b.pos.x, 0, b.pos.z, 0,0,-1);
+    if(!trailsOnly){
+      const step=CELL_SIZE; stroke(28);
+      for(let x=Math.floor((b.pos.x-R)/step)*step; x<=Math.ceil((b.pos.x+R)/step)*step; x+=step){ line(x,0,b.pos.z-R, x,0,b.pos.z+R); }
+      for(let z=Math.floor((b.pos.z-R)/step)*step; z<=Math.ceil((b.pos.z+R)/step)*step; z+=step){ line(b.pos.x-R,0,z, b.pos.x+R,0,z); }
+      stroke(100); for(const e of streets){ line(e.a.x,0.2,e.a.z, e.b.x,0.2,e.b.z); }
+      stroke(180); for(const bd of buildings){ const x=bd.x, z=bd.z, w=bd.footprint.w, d=bd.footprint.d; line(x-w/2,0.2,z-d/2, x+w/2,0.2,z-d/2); line(x+w/2,0.2,z-d/2, x+w/2,0.2,z+d/2); line(x+w/2,0.2,z+d/2, x-w/2,0.2,z+d/2); line(x-w/2,0.2,z+d/2, x-w/2,0.2,z-d/2); }
+      if(!MODE_2D){ stroke(140); for(const br of bridges){ line(br.p1.x,0.3,br.p1.z, br.p2.x,0.3,br.p2.z); } }
+    }
+    drawTrails3D({nearOnly:true, origin:{x:b.pos.x,z:b.pos.z}, radius:R});
+    pop(); endViewport();
+  }else if(viewIndex===4){ // follow orange
+    const b=orangeLead||orangeBots[0]||bots[0]; const R=FOLLOW_R;
+    push(); setViewport(0);
+    ortho(-R,R,R,-R,1,WORLD_SIZE*4); camera(b.pos.x, WORLD_SIZE*2, b.pos.z, b.pos.x, 0, b.pos.z, 0,0,-1);
+    if(!trailsOnly){
+      const step=CELL_SIZE; stroke(28);
+      for(let x=Math.floor((b.pos.x-R)/step)*step; x<=Math.ceil((b.pos.x+R)/step)*step; x+=step){ line(x,0,b.pos.z-R, x,0,b.pos.z+R); }
+      for(let z=Math.floor((b.pos.z-R)/step)*step; z<=Math.ceil((b.pos.z+R)/step)*step; z+=step){ line(b.pos.x-R,0,z, b.pos.x+R,0,z); }
+      stroke(100); for(const e of streets){ line(e.a.x,0.2,e.a.z, e.b.x,0.2,e.b.z); }
+      stroke(180); for(const bd of buildings){ const x=bd.x, z=bd.z, w=bd.footprint.w, d=bd.footprint.d; line(x-w/2,0.2,z-d/2, x+w/2,0.2,z-d/2); line(x+w/2,0.2,z-d/2, x+w/2,0.2,z+d/2); line(x+w/2,0.2,z+d/2, x-w/2,0.2,z+d/2); line(x-w/2,0.2,z+d/2, x-w/2,0.2,z-d/2); }
+      if(!MODE_2D){ stroke(140); for(const br of bridges){ line(br.p1.x,0.3,br.p1.z, br.p2.x,0.3,br.p2.z); } }
+    }
+    drawTrails3D({nearOnly:true, origin:{x:b.pos.x,z:b.pos.z}, radius:R});
+    pop(); endViewport();
+  }
+
+  const fname=(trailsOnly?'trails':'wireframes')+'_view'+viewIndex+'_'+Date.now();
+  saveCanvas(fname,'png');
+
+  // restore
+  resizeCanvas(prevW, prevH);
+  try{ pixelDensity(prevDensity); }catch(e){}
+  computeViewRects();
+}
+
+function keyPressed(){
+  if(key==='T'||key==='t'){ toggleTime(); return; }
+  if(key==='M'||key==='m'){ MODE_2D=!MODE_2D; updateModeBadge(); newScenario(); return; }
+  if(key==='L'||key==='l'){ const el=document.getElementById('legend'); if(el) el.style.display=(el.style.display==='none'||!el.style.display)?'block':'none'; return; }
+  if(key==='R'||key==='r'){ newScenario(); return; }
+  if(key==='D'||key==='d'){ openDSL(); return; }
+  if(key>='1'&&key<='4'){ exportViewPNG(parseInt(key,10), false); return; }
+  if(key>='5'&&key<='8'){ exportViewPNG(parseInt(key,10)-4, true); return; }
+}
+
+// ============================
+// UI: DSL
+// ============================
+function openDSL(){ const m=document.getElementById('dslModal'); if(m) m.style.display='flex'; }
+function closeDSL(){ const m=document.getElementById('dslModal'); if(m) m.style.display='none'; }
+function parseBool(v){ const s=(v||'').toString().trim().toLowerCase(); if(['on','true','1','yes'].includes(s)) return true; if(['off','false','0','no'].includes(s)) return false; return null; }
+function applyDSL(){
+  const ta=document.getElementById('dslText'); const err=document.getElementById('dslError'); if(err) err.textContent='';
+  if(!ta) return closeDSL();
+  const lines=ta.value.split(/\r?\n/);
+  for(const raw of lines){
+    const ln=raw.trim(); if(!ln || ln[0]==='#') continue;
+    const m=ln.match(/^([A-Za-z_][\w-]*)\s*:\s*(.+)$/); if(!m) continue;
+    const key=m[1].toLowerCase(), val=m[2].trim();
+    if(key==='border' || key==='splitborder'){ const b=parseBool(val); if(b===null){ if(err) err.textContent='border expects on/off'; } else { SPLIT_BORDER_ON=b; } }
+    if(key==='mode2d'){ const b=parseBool(val); if(b!==null){ MODE_2D=b; updateModeBadge(); newScenario(); } }
+    if(key==='green_count'){ const n=Math.max(0,Math.floor(+val||0)); document.getElementById('numGreen').value=n; rebuildBots(); planPaths(); }
+    if(key==='orange_count'){ const n=Math.max(0,Math.floor(+val||0)); document.getElementById('numOrange').value=n; rebuildBots(); planPaths(); }
+    // (Short demo DSL. Gait/weights hooks could be added here if you want live-tuning.)
+  }
+  closeDSL();
+}
+document.getElementById('dslApply').onclick = applyDSL;
+document.getElementById('dslClose').onclick = closeDSL;
+document.getElementById('dslModal').addEventListener('click', (e)=>{ if(e.target.id==='dslModal') closeDSL(); });
+
+// ----------------------------
+</script>
+</body>
+</html>
