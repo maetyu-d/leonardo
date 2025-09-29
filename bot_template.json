@@ -1,0 +1,22 @@
+{
+  "template": "green",
+  "name": "Proto-G7",
+  "color": "#22DD88",
+  "count": 2,
+  "movement": {
+    "baseSpeedMul": 0.95,
+    "turnMul": 0.9,
+    "turnBiasLeft": 1.3,
+    "turnBiasRight": 0.85,
+    "steerNoisePct": 0.12,
+    "wobbleAmp": 0.28,
+    "wobbleFreq": 0.5,
+    "rollAmp": 0.14,
+    "limpLatAmp": 28,
+    "speedBiasAmp": 0.14,
+    "texSpeedK": 0.55,
+    "texTurnK": 0.6
+  },
+  "fatigueRate": 0.0043,
+  "restDuration": 22
+}
