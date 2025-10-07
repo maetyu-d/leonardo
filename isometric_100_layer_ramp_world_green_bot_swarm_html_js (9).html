@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Isometric 100-Layer Ramp World – Green & Orange Swarm</title>
+  <style>
+    :root{ --panel-w:360px; }
+    html, body { height:100%; margin:0; background:#000; color:#ddd; font-family:system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, sans-serif; overflow:hidden; }
+    #view { display:block; width:100vw; height:100vh; cursor:grab; }
+    #hint { position:fixed; bottom:10px; left:10px; color:#aaa; font-size:12px; background:rgba(0,0,0,0.5); padding:6px 8px; border-radius:8px; border:1px solid #222; z-index:5; }
+    #tests { position:fixed; bottom:10px; right:10px; font-size:12px; color:#ddd; background:rgba(0,0,0,0.6); padding:6px 8px; border:1px solid #333; border-radius:8px; max-width:42vw; z-index:5; }
+
+    /* Right-side panel (H to toggle) */
+    #ui { position:fixed; top:10px; right:10px; bottom:10px; width:var(--panel-w); background:rgba(20,20,20,0.92); border:1px solid #333; border-radius:12px; padding:12px; display:grid; grid-auto-rows:min-content; gap:10px; align-content:start; overflow:auto; z-index:11; transition: transform .25s ease; }
+    #ui.collapsed{ transform: translateX(calc(100% + 12px)); }
+    #ui .group { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+    #ui label { font-size:12px; opacity:.95; white-space:nowrap; }
+    #ui input[type="range"] { width: 160px; accent-color:#33FF33; }
+    #ui input[type="number"]{ width: 88px; }
+    #ui button { background:#111; color:#ddd; border:1px solid #333; border-radius:8px; padding:6px 10px; cursor:pointer; }
+    #ui button:hover { background:#181818; }
+    #ui .row { display:flex; gap:8px; flex-wrap:wrap; }
+    #ui .pill { padding:4px 8px; border-radius:999px; border:1px solid #333; background:#0b0b0b; font-size:12px; margin-left:auto; }
+  </style>
+</head>
+<body>
+  <canvas id="view"></canvas>
+
+  <aside id="ui">
+    <div class="group"><input id="toggleWireframe" type="checkbox" checked><label for="toggleWireframe"> Wireframes</label></div>
+    <div class="group"><input id="rsOnly" type="checkbox"><label for="rsOnly"> Ramps/Stairs only</label></div>
+    <div class="group"><label for="maxStairLayers">Max layers per stair segment</label><input id="maxStairLayers" type="number" min="1" max="100" step="1" value="1"></div>
+    <div class="group"><label>Green Bots</label><input id="greenSlider" type="range" min="0" max="1000" step="1" value="200"><span id="greenOut">200</span></div>
+    <div class="group"><label>Orange Bots</label><input id="orangeSlider" type="range" min="0" max="1000" step="1" value="50"><span id="orangeOut">50</span></div>
+    <div class="group"><label>Trail Thickness</label><input id="thicknessSlider" type="range" min="0.5" max="6" step="0.5" value="1"><span id="thicknessOut">1</span>px</div>
+    <div class="group"><label>Trail Opacity</label><input id="opacitySlider" type="range" min="0.05" max="1" step="0.01" value="0.9"><span id="opacityOut">0.90</span></div>
+    <div class="group"><label>Sim Speed</label><input id="speedSlider" type="range" min="0.1" max="10" step="0.1" value="1"><span id="speedOut">1.0×</span></div>
+    <div class="group"><label>Grid Size</label><input id="gridSlider" type="range" min="0" max="4" step="1" value="3"><span id="gridOut">4000</span></div>
+    <div class="group"><label>Wireframe Alpha</label><input id="wfAlphaSlider" type="range" min="0" max="1" step="0.05" value="1"><span id="wfAlphaOut">1.00</span></div>
+
+    <!-- Green bot behaviour controls -->
+    <div class="group"><label>Green Asymmetry</label><input id="gAsym" type="range" min="0" max="1" step="0.01" value="0.85"><span id="gAsymOut">0.85</span></div>
+    <div class="group"><label>Aim Skew (°)</label><input id="gAimSkew" type="range" min="-45" max="45" step="1" value="0"><span id="gAimSkewOut">0°</span></div>
+    <div class="group"><label>Bias Drift (°/s)</label><input id="gBias" type="range" min="-30" max="30" step="1" value="0"><span id="gBiasOut">0°/s</span></div>
+    <div class="group"><label>Turn With</label><input id="gTurnWith" type="range" min="0.2" max="5" step="0.1" value="1"><span id="gTurnWithOut">1.0×</span></div>
+    <div class="group"><label>Turn Against</label><input id="gTurnAgainst" type="range" min="0.2" max="5" step="0.1" value="1"><span id="gTurnAgainstOut">1.0×</span></div>
+
+    <div class="group"><label for="colorScheme">Bot Colours</label>
+      <select id="colorScheme">
+        <option value="#33FF33,#E65C00">Default — Green #33FF33 / Orange #E65C00</option>
+        <option value="#FF3B30,#FFD60A">#FF3B30  —  #FFD60A</option>
+        <option value="#FF9500,#00FFFF">#FF9500  —  #00FFFF</option>
+        <option value="#FF006E,#00FF85">#FF006E  —  #00FF85</option>
+        <option value="#00FFFF,#FF00FF">#00FFFF  —  #FF00FF</option>
+        <option value="#00FFB3,#0040FF">#00FFB3  —  #0040FF</option>
+        <option value="#80FF00,#0055FF">#80FF00  —  #0055FF</option>
+        <option value="#FF0000,#00FF00">#FF0000  —  #00FF00</option>
+        <option value="#FFDD00,#2222FF">#FFDD00  —  #2222FF</option>
+        <option value="#FF6600,#00CCFF">#FF6600  —  #00CCFF</option>
+        <option value="#FFFFFF,#FF5500">#FFFFFF  —  #FF5500</option>
+        <option value="#FFFFFF,#00FFFF">#FFFFFF  —  #00FFFF</option>
+        <option value="#E0E0E0,#FF00AA">#E0E0E0  —  #FF00AA</option>
+        <option value="#39FF14,#FF073A">#39FF14  —  #FF073A</option>
+        <option value="#8A2BE2,#FFFF33">#8A2BE2  —  #FFFF33</option>
+        <option value="#FF1493,#00FFFF">#FF1493  —  #00FFFF</option>
+      </select>
+    </div>
+
+    <div class="row"><button id="reset">Reset</button><button id="pause">Pause</button><button id="export">Export 10k PNG</button><button id="runTests">Run Tests</button><span class="pill" id="stats">—</span></div>
+  </aside>
+
+  <div id="hint">Drag to pan • = / − to zoom • Press <b>H</b> to hide/show controls • 100 layers • Ramps red • Stairs electric blue • Greens limp (ramps only) • Oranges plan via ramps/stairs</div>
+  <div id="tests" hidden>—</div>
+
+  <script>
+  (function(){
+    'use strict';
+
+    // ====== World & Config ======
+    const WORLD_SIZE = 10000;
+    const LAYERS = 100;
+    const LAYER_HEIGHT = 100;
+    let GREEN_COLOR = '#33FF33';
+    let ORANGE_COLOR = '#E65C00';
+    const RAMP_CYCLE = ['UR','LR','LL','UL'];
+    const RAMP_SIZE = 600;
+    const STAIR_DUR_PER_LAYER = 0.9; // seconds per layer of stair wind
+
+    // Wireframe colors & opacity (full brightness)
+    let GRID_ALPHA = 0.35;         // grid lines
+    let BOUNDARY_ALPHA = 0.65;     // layer boundary
+    const RAMP_COLOR = '#FF0000';  // red
+    const STAIRS_COLOR = '#00FFFF';// electric blue
+    const SHAPE_FILL_ALPHA = 0.10; // subtle fill
+
+    // Runtime-adjustable
+    let TRAIL_THICKNESS = 1;     // px
+    let TRAIL_OPACITY = 0.9;     // 0..1
+    let SIM_SPEED = 1.0;         // dt multiplier
+    const GRID_OPTIONS = [500, 1000, 2000, 4000, 8000];
+    let gridIndex = 3;           // default 4000
+    let WIREFRAME_ALPHA = 1.0;   // global multiplier for wireframe
+
+    // Green-behaviour globals (sliders)
+    let G_ASYM = 0.85;                 // 0..1 (1 = symmetric, 0 = very limpy)
+    let G_AIM_SKEW_RAD = 0.0;          // radians, applied to desired aim
+    let G_BIAS_RAD_PER_S = 0.0;        // radians/sec, constant drift
+    let G_TURN_WITH = 1.0;             // gain when err >= 0
+    let G_TURN_AGAINST = 1.0;          // gain when err < 0
+
+    // ====== Canvas ======
+    const view=document.getElementById('view');
+    const dpr=Math.max(1,window.devicePixelRatio||1);
+    const ctx=view.getContext('2d');
+    function resize(){ view.width=Math.floor(view.clientWidth*dpr); view.height=Math.floor(view.clientHeight*dpr); }
+    window.addEventListener('resize',resize); resize();
+
+    // ====== Camera (pan + zoom only, no WASD) ======
+    const cam={x:WORLD_SIZE/2,y:WORLD_SIZE/2,layer:50,zoom:0.25};
+    function clampCam(){
+      cam.x=Math.max(0,Math.min(WORLD_SIZE,cam.x));
+      cam.y=Math.max(0,Math.min(WORLD_SIZE,cam.y));
+      cam.layer=Math.max(0,Math.min(LAYERS-1,cam.layer));
+      cam.zoom=Math.max(0.02,Math.min(4,cam.zoom));
+    }
+
+    let dragging=false,lastX=0,lastY=0;
+    view.addEventListener('mousedown',e=>{ if(e.button!==0) return; dragging=true; lastX=e.clientX; lastY=e.clientY; view.style.cursor='grabbing'; });
+    window.addEventListener('mouseup',()=>{ dragging=false; view.style.cursor='grab'; });
+    window.addEventListener('mousemove',e=>{ if(!dragging) return; const dx=e.clientX-lastX, dy=e.clientY-lastY; lastX=e.clientX; lastY=e.clientY; cam.x-=dx/(cam.zoom*dpr*2); cam.y+=dy/(cam.zoom*dpr*2); clampCam(); });
+
+    window.addEventListener('keydown',e=>{
+      if(e.key==='='||e.key==='+'){ cam.zoom*=1.1; clampCam(); }
+      if(e.key==='-'||e.key==='_'){ cam.zoom/=1.1; clampCam(); }
+      if(e.key==='h' || e.key==='H'){ setUICollapsed(!uiCollapsed); }
+    });
+
+    // ====== Layer index normaliser ======
+    function normLayer(l){ if(!Number.isFinite(l)) l = 0; l = Math.floor(l); if(l < 0) l = 0; else if(l >= LAYERS) l = LAYERS-1; return l; }
+
+    // ====== Geometry ======
+    function rampCornerForLayer(layer){ const L = normLayer(layer); const pos=RAMP_CYCLE[L%4]; switch(pos){
+      case 'UR': return {corner:'UR', x:WORLD_SIZE, y:0};
+      case 'LR': return {corner:'LR', x:WORLD_SIZE, y:WORLD_SIZE};
+      case 'LL': return {corner:'LL', x:0, y:WORLD_SIZE};
+      case 'UL': return {corner:'UL', x:0, y:0};
+      default: return {corner:'UR', x:WORLD_SIZE, y:0};
+    }}
+    function stairsCornerForLayer(layer){ const r=rampCornerForLayer(layer).corner; switch(r){
+      case 'UR': return {corner:'LL', x:0, y:WORLD_SIZE};
+      case 'LR': return {corner:'UL', x:0, y:0};
+      case 'LL': return {corner:'UR', x:WORLD_SIZE, y:0};
+      case 'UL': return {corner:'LR', x:WORLD_SIZE, y:WORLD_SIZE};
+      default: return {corner:'LL', x:0, y:WORLD_SIZE};
+    }}
+    function insideRampArea(x,y,layer){ const r=rampCornerForLayer(layer), s=RAMP_SIZE;
+      if(r.corner==='UR'){ const dx=WORLD_SIZE-x, dy=y; return dx>=0&&dy>=0&&dx<=s&&dy<=s&&(dx+dy<=s);} 
+      else if(r.corner==='LR'){ const dx=WORLD_SIZE-x, dy=WORLD_SIZE-y; return dx>=0&&dy>=0&&dx<=s&&dy<=s&&(dx+dy<=s);} 
+      else if(r.corner==='LL'){ const dx=x, dy=WORLD_SIZE-y; return dx>=0&&dy>=0&&dx<=s&&dy<=s&&(dx+dy<=s);} 
+      else { const dx=x, dy=y; return dx>=0&&dy>=0&&dx<=s&&dy<=s&&(dx+dy<=s);} }
+    function rampInnerPoint(layer){ const r=rampCornerForLayer(layer), t=0.6, s=RAMP_SIZE*t; switch(r.corner){
+      case 'UR': return {x:WORLD_SIZE-s, y:s, layer};
+      case 'LR': return {x:WORLD_SIZE-s, y:WORLD_SIZE-s, layer};
+      case 'LL': return {x:s, y:WORLD_SIZE-s, layer};
+      case 'UL': return {x:s, y:s, layer};
+    }}
+
+    // ====== Projection (isometric) ======
+    function worldToScreen(x,y,layer){ const z=layer*LAYER_HEIGHT; let sx=(x-y), sy=(x+y)*0.5 - z; const cx=(cam.x-cam.y), cy=(cam.x+cam.y)*0.5 - (cam.layer*LAYER_HEIGHT); sx=(sx-cx)*cam.zoom*dpr + view.width/2; sy=(sy-cy)*cam.zoom*dpr + view.height/2; return {x:sx,y:sy}; }
+
+    // ====== Goal ======
+    let goal=null; function randomGoal(){ goal={x:Math.random()*WORLD_SIZE, y:Math.random()*WORLD_SIZE, layer:(Math.random()*LAYERS)|0}; bots.forEach(b=>{b.target=null; b.plan=null;}); }
+
+    // ====== Bots ======
+    const TRAIL_SAMPLE_DIST=3; const MAX_BOTS=1000; let bots=[];
+    function makeGreen(){ const x=Math.random()*WORLD_SIZE, y=Math.random()*WORLD_SIZE, layer=(Math.random()*LAYERS)|0; return { type:'green', color:GREEN_COLOR, x,y, layer, heading:Math.random()*Math.PI*2, baseSpeed:(90+Math.random()*60), fatigueRate:0.00030, fatigue:0, asym:G_ASYM, wobbleAmp:0.6+Math.random()*0.7, wobbleFreq:0.5+Math.random()*1.2, wobblePhase:Math.random()*Math.PI*2, target:null, plan:null, lastTrailX:x, lastTrailY:y, lastTrailLayer:layer, trail:[{x,y,layer}] }; }
+    function makeOrange(){ const x=Math.random()*WORLD_SIZE, y=Math.random()*WORLD_SIZE, layer=(Math.random()*LAYERS)|0; return { type:'orange', color:ORANGE_COLOR, x,y, layer, heading:Math.random()*Math.PI*2, baseSpeed:(90+Math.random()*60)*1.10, fatigueRate:0.00027, fatigue:0, target:null, plan:null, lastTrailX:x, lastTrailY:y, lastTrailLayer:layer, trail:[{x,y,layer}] }; }
+    function countType(t){ return bots.reduce((n,b)=>n+(b.type===t),0); }
+    function adjustCounts(targetGreen, targetOrange){ let g=countType('green'), o=countType('orange'); for(let i=bots.length-1;i>=0&&g>targetGreen;i--){ if(bots[i].type==='green'){ bots.splice(i,1); g--; } } for(let i=bots.length-1;i>=0&&o>targetOrange;i--){ if(bots[i].type==='orange'){ bots.splice(i,1); o--; } } while(g<targetGreen){ bots.push(makeGreen()); g++; } while(o<targetOrange){ bots.push(makeOrange()); o++; } }
+
+    // Orange routing
+    function planOrange(bot){ if(!goal) return null; if(Math.round(bot.layer)===goal.layer) return {mode:'toGoal'}; const rampC=rampCornerForLayer(bot.layer); const stairC=stairsCornerForLayer(bot.layer); const start={x:bot.x,y:bot.y}; const gpt={x:goal.x,y:goal.y}; const candidates=[{corner:{x:rampC.x,y:rampC.y}, use:'ramp'},{corner:{x:stairC.x,y:stairC.y}, use:'stairs'}]; let best=null, bestCost=Infinity; for(const c of candidates){ const cost=Math.hypot(start.x-c.corner.x,start.y-c.corner.y)+Math.hypot(gpt.x-c.corner.x,gpt.y-c.corner.y); if(cost<bestCost){bestCost=cost;best=c;} } return {mode:'toCorner', corner:best.corner, use:best.use}; }
+
+    // ====== Stairs: spiral (two full turns per layer), optional multi-layer segments ======
+    function startStairWind(bot, dirUp){
+      const sc = stairsCornerForLayer(bot.layer);
+      const stairSize = 220;
+      const center = {
+        x: sc.x + (sc.corner.includes('L') ? -stairSize/2 : stairSize/2),
+        y: sc.y + (sc.corner.includes('U') ? -stairSize/2 : stairSize/2)
+      };
+      const dx = bot.x - center.x, dy = bot.y - center.y;
+      const ang0 = Math.atan2(dy, dx);
+      const startLayer = Math.round(bot.layer);
+      const dir = dirUp ? 1 : -1;
+      let desired = (goal ? goal.layer : (startLayer + dir * maxStairLayers));
+      desired = Math.max(0, Math.min(LAYERS-1, desired));
+      let delta = desired - startLayer;
+      if (dir === 1) delta = Math.max(1, Math.min(maxStairLayers, delta));
+      else delta = -Math.max(1, Math.min(maxStairLayers, Math.abs(delta)));
+      let targetLayer = startLayer + delta;
+      targetLayer = Math.max(0, Math.min(LAYERS-1, targetLayer));
+      const span = Math.max(1, Math.abs(targetLayer - startLayer));
+      const dur = STAIR_DUR_PER_LAYER * span;
+      return {
+        mode: 'stairWind',
+        center, radius: Math.max(60, stairSize*0.45),
+        ang: ang0, angDir: dir>0 ? 1 : -1,
+        t: 0, dur,
+        startLayer,
+        targetLayer,
+        layerSpan: span
+      };
+    }
+    function updateStairWind(bot, dt){
+      const p = bot.plan; if(!p) return;
+      const sgn = (p.targetLayer > p.startLayer) ? 1 : -1;
+      p.t += dt * SIM_SPEED;
+      const alpha = Math.min(1, p.t / p.dur);
+      p.ang += p.angDir * 4*Math.PI * (p.layerSpan) * (dt * SIM_SPEED / p.dur);
+      bot.layer = p.startLayer + sgn * (alpha * p.layerSpan);
+      bot.x = p.center.x + p.radius * Math.cos(p.ang);
+      bot.y = p.center.y + p.radius * Math.sin(p.ang);
+      bot.heading = p.ang + (p.angDir>0?Math.PI/2:-Math.PI/2);
+      if(alpha >= 1){ bot.layer = p.targetLayer; bot.plan = null; }
+    }
+
+    // ====== Simulation ======
+    let simTime=0; const GOAL_REACH=40; const CORNER_REACH=60;
+    function angleWrap(a){ while(a>Math.PI)a-=Math.PI*2; while(a<-Math.PI)a+=Math.PI*2; return a; }
+    function step(dt){ if(!goal) return; simTime+=dt*SIM_SPEED;
+      for(const b of bots){ if(Math.round(b.layer)===goal.layer && Math.hypot(goal.x-b.x, goal.y-b.y)<=GOAL_REACH){ randomGoal(); break; } }
+      for(const b of bots){ if(b.type==='green'){
+          if(Math.round(b.layer)===goal.layer){ b.target={x:goal.x,y:goal.y,layer:goal.layer}; } else { const rc=rampCornerForLayer(b.layer); b.target={x:rc.x,y:rc.y,layer:b.layer}; }
+          let desired=Math.atan2(b.target.y-b.y, b.target.x-b.x) + G_AIM_SKEW_RAD;
+          const err=angleWrap(desired-b.heading);
+          b.asym = G_ASYM;
+          const limp=(1-b.asym)*1.1;
+          const wob=b.wobbleAmp*Math.sin(2*Math.PI*b.wobbleFreq*simTime + b.wobblePhase);
+          const baseKp=3.2;
+          const kp = baseKp * (err>=0 ? G_TURN_WITH : G_TURN_AGAINST);
+          const omega=kp*err + limp + wob + G_BIAS_RAD_PER_S;
+          b.fatigue=Math.min(0.5, b.fatigue + b.fatigueRate * Math.hypot(b.x-b.lastTrailX, b.y-b.lastTrailY)/1000);
+          const fwd=(b.baseSpeed*(1-b.fatigue))*(0.85-0.25*Math.min(1,Math.abs(omega)/4));
+          b.heading+=omega*dt*SIM_SPEED; b.x+=Math.cos(b.heading)*fwd*dt*SIM_SPEED; b.y+=Math.sin(b.heading)*fwd*dt*SIM_SPEED;
+          if(b.x<0)b.x=0; if(b.y<0)b.y=0; if(b.x>WORLD_SIZE)b.x=WORLD_SIZE; if(b.y>WORLD_SIZE)b.y=WORLD_SIZE;
+          if(Math.round(b.layer)!==goal.layer && insideRampArea(b.x,b.y,b.layer)){
+            const rc=rampCornerForLayer(b.layer); if(Math.hypot(b.x-rc.x,b.y-rc.y)<CORNER_REACH){ b.layer += (goal.layer>Math.round(b.layer)?1:-1); }
+          }
+        } else {
+          if(!b.plan) b.plan=planOrange(b);
+          if(Math.round(b.layer)===goal.layer) b.plan={mode:'toGoal'};
+          if(b.plan && b.plan.mode==='toCorner'){
+            const t=b.plan.corner; const desired=Math.atan2(t.y-b.y,t.x-b.x); const err=angleWrap(desired-b.heading); const omega=4.0*err;
+            b.fatigue=Math.min(0.5, b.fatigue + b.fatigueRate * Math.hypot(b.x-b.lastTrailX,b.y-b.lastTrailY)/1000);
+            const fwd=(b.baseSpeed*(1-b.fatigue));
+            b.heading+=omega*dt*SIM_SPEED; b.x+=Math.cos(b.heading)*fwd*dt*SIM_SPEED; b.y+=Math.sin(b.heading)*fwd*dt*SIM_SPEED;
+            const dist=Math.hypot(b.x-t.x,b.y-t.y);
+            if(dist<CORNER_REACH){
+              if(b.plan.use==='stairs'){
+                b.plan = startStairWind(b, goal.layer>Math.round(b.layer));
+              } else {
+                b.plan = {mode:'climb', corner:t, use:'ramp'};
+              }
+            }
+          } else if(b.plan && b.plan.mode==='stairWind'){
+            updateStairWind(b, dt);
+            if(!b.plan){ if(Math.round(b.layer)!==goal.layer){ b.plan = planOrange(b); } else { b.plan = {mode:'toGoal'}; } }
+          } else if(b.plan && b.plan.mode==='climb'){
+            if(Math.round(b.layer)!==goal.layer){ b.layer += (goal.layer>Math.round(b.layer)?1:-1); } else { b.plan={mode:'toGoal'}; }
+            if(b.plan && b.plan.corner){ b.x=b.plan.corner.x; b.y=b.plan.corner.y; }
+          } else {
+            const desired=Math.atan2(goal.y-b.y,goal.x-b.x); const err=angleWrap(desired-b.heading); const omega=4.0*err;
+            b.fatigue=Math.min(0.5, b.fatigue + b.fatigueRate * Math.hypot(b.x-b.lastTrailX,b.y-b.lastTrailY)/1000);
+            const fwd=(b.baseSpeed*(1-b.fatigue));
+            b.heading+=omega*dt*SIM_SPEED; b.x+=Math.cos(b.heading)*fwd*dt*SIM_SPEED; b.y+=Math.sin(b.heading)*fwd*dt*SIM_SPEED;
+          }
+          if(b.x<0)b.x=0; if(b.y<0)b.y=0; if(b.x>WORLD_SIZE)b.x=WORLD_SIZE; if(b.y>WORLD_SIZE)b.y=WORLD_SIZE;
+        }
+        const moved=Math.hypot(b.x-b.lastTrailX,b.y-b.lastTrailY); if(moved>=TRAIL_SAMPLE_DIST){ b.trail.push({x:b.x,y:b.y,layer:b.layer}); b.lastTrailX=b.x; b.lastTrailY=b.y; b.lastTrailLayer=b.layer; }
+      }
+    }
+
+    // ====== Wireframes for ALL 100 layers (grid + boundary + ramp + stairs) ======
+    function currentGridStep(){ return GRID_OPTIONS[gridIndex]; }
+    function drawAllWireframes(){ const step=currentGridStep(); ctx.save(); for(let l=0;l<LAYERS;l++){
+        ctx.globalAlpha = WIREFRAME_ALPHA;
+        if(!showRampStairsOnly){
+          ctx.lineWidth=1.5*dpr; ctx.strokeStyle=`rgba(255,255,255,${GRID_ALPHA})`;
+          for(let x=0;x<=WORLD_SIZE;x+=step){ const A=worldToScreen(x,0,l), B=worldToScreen(x,WORLD_SIZE,l); ctx.beginPath(); ctx.moveTo(A.x,A.y); ctx.lineTo(B.x,B.y); ctx.stroke(); }
+          for(let y=0;y<=WORLD_SIZE;y+=step){ const A=worldToScreen(0,y,l), B=worldToScreen(WORLD_SIZE,y,l); ctx.beginPath(); ctx.moveTo(A.x,A.y); ctx.lineTo(B.x,B.y); ctx.stroke(); }
+          ctx.strokeStyle=`rgba(255,255,255,${BOUNDARY_ALPHA})`;
+          const TL=worldToScreen(0,0,l), TR=worldToScreen(WORLD_SIZE,0,l), BR=worldToScreen(WORLD_SIZE,WORLD_SIZE,l), BL=worldToScreen(0,WORLD_SIZE,l);
+          ctx.beginPath(); ctx.moveTo(TL.x,TL.y); ctx.lineTo(TR.x,TR.y); ctx.lineTo(BR.x,BR.y); ctx.lineTo(BL.x,BL.y); ctx.closePath(); ctx.stroke();
+        }
+        const rc=rampCornerForLayer(l);
+        const tri=[ {x:rc.x,y:rc.y},
+          rc.corner==='UR'?{x:WORLD_SIZE-RAMP_SIZE,y:0}:
+          rc.corner==='LR'?{x:WORLD_SIZE-RAMP_SIZE,y:WORLD_SIZE}:
+          rc.corner==='LL'?{x:RAMP_SIZE,y:WORLD_SIZE}:{x:RAMP_SIZE,y:0},
+          rc.corner==='UR'?{x:WORLD_SIZE,y:RAMP_SIZE}:
+          rc.corner==='LR'?{x:WORLD_SIZE,y:WORLD_SIZE-RAMP_SIZE}:
+          rc.corner==='LL'?{x:0,y:WORLD_SIZE-RAMP_SIZE}:{x:0,y:RAMP_SIZE}
+        ];
+        ctx.fillStyle=`rgba(255,0,0,${SHAPE_FILL_ALPHA})`;
+        ctx.beginPath(); for(let i=0;i<3;i++){ const P=worldToScreen(tri[i].x,tri[i].y,l); if(i===0) ctx.moveTo(P.x,P.y); else ctx.lineTo(P.x,P.y);} ctx.closePath(); ctx.fill();
+        ctx.strokeStyle=RAMP_COLOR; ctx.lineWidth=2*dpr; ctx.beginPath(); for(let i=0;i<3;i++){ const A=worldToScreen(tri[i].x,tri[i].y,l), B=worldToScreen(tri[(i+1)%3].x,tri[(i+1)%3].y,l); ctx.moveTo(A.x,A.y); ctx.lineTo(B.x,B.y);} ctx.stroke();
+        const sc=stairsCornerForLayer(l), stairSize=220;
+        const sq=[ {x:sc.x,y:sc.y}, {x:sc.x+(sc.corner.includes('L')?-stairSize:stairSize),y:sc.y}, {x:sc.x+(sc.corner.includes('L')?-stairSize:stairSize),y:sc.y+(sc.corner.includes('U')?-stairSize:stairSize)}, {x:sc.x,y:sc.y+(sc.corner.includes('U')?-stairSize:stairSize)} ];
+        const P=sq.map(p=>worldToScreen(p.x,p.y,l));
+        ctx.fillStyle=`rgba(0,255,255,${SHAPE_FILL_ALPHA})`; ctx.beginPath(); ctx.moveTo(P[0].x,P[0].y); for(let i=1;i<4;i++) ctx.lineTo(P[i].x,P[i].y); ctx.closePath(); ctx.fill();
+        ctx.strokeStyle=STAIRS_COLOR; ctx.lineWidth=2*dpr; ctx.beginPath(); for(let i=0;i<4;i++){ const A=P[i], B=P[(i+1)%4]; ctx.moveTo(A.x,A.y); ctx.lineTo(B.x,B.y);} ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(P[0].x,P[0].y); ctx.lineTo(P[2].x,P[2].y); ctx.moveTo(P[1].x,P[1].y); ctx.lineTo(P[3].x,P[3].y); ctx.stroke();
+      }
+      ctx.restore(); }
+
+    // ====== Draw ======
+    function drawBots(){ for(const b of bots){ const ld=Math.abs(Math.round(b.layer)-cam.layer); if(ld>6) continue; const p=worldToScreen(b.x,b.y,b.layer); const size=(ld<=1?4:2)*dpr; ctx.save(); ctx.translate(p.x,p.y); ctx.rotate(b.heading); ctx.beginPath(); ctx.moveTo(0,-size); ctx.lineTo(size*0.9,0); ctx.lineTo(0,size); ctx.lineTo(-size*0.9,0); ctx.closePath(); ctx.globalAlpha=(ld===0?1:ld===1?0.8:0.55); ctx.fillStyle=b.color; ctx.fill(); ctx.globalAlpha=1; ctx.restore(); } }
+    function drawTrails(){ ctx.lineWidth=TRAIL_THICKNESS*dpr; ctx.globalAlpha=TRAIL_OPACITY; for(const b of bots){ if(b.trail.length<2) continue; ctx.strokeStyle=b.color; ctx.beginPath(); let first=true; for(const pt of b.trail){ const p=worldToScreen(pt.x,pt.y,pt.layer); if(first){ ctx.moveTo(p.x,p.y); first=false; } else ctx.lineTo(p.x,p.y);} ctx.stroke(); } ctx.globalAlpha=1; }
+    function drawGoal(){ if(!goal) return; const p=worldToScreen(goal.x,goal.y,goal.layer); ctx.beginPath(); ctx.arc(p.x,p.y,6*dpr,0,Math.PI*2); ctx.fillStyle='#fff'; ctx.fill(); ctx.lineWidth=1.5*dpr; ctx.strokeStyle='#fff'; ctx.beginPath(); ctx.moveTo(p.x-10*dpr,p.y); ctx.lineTo(p.x+10*dpr,p.y); ctx.stroke(); ctx.beginPath(); ctx.moveTo(p.x,p.y-10*dpr); ctx.lineTo(p.x,p.y+10*dpr); ctx.stroke(); }
+    function drawScene(){ ctx.setTransform(1,0,0,1,0,0); ctx.clearRect(0,0,view.width,view.height); ctx.fillStyle='#000'; ctx.fillRect(0,0,view.width,view.height); if(showWireframe) drawAllWireframes(); drawTrails(); drawGoal(); drawBots(); }
+
+    // ====== Export 10k Trails (isometric, high-res) ======
+    async function exportHighResPNG(){ const size=10000; const off=document.createElement('canvas'); off.width=size; off.height=size; const octx=off.getContext('2d',{alpha:false}); octx.fillStyle='#000'; octx.fillRect(0,0,size,size); function isoXY(x,y,z){ return {ix:(x-y), iy:(x+y)*0.5 - z}; } const corners=[ isoXY(0,0,0), isoXY(WORLD_SIZE,0,0), isoXY(0,WORLD_SIZE,0), isoXY(WORLD_SIZE,WORLD_SIZE,0), isoXY(0,0,LAYERS*LAYER_HEIGHT), isoXY(WORLD_SIZE,0,LAYERS*LAYER_HEIGHT), isoXY(0,WORLD_SIZE,LAYERS*LAYER_HEIGHT), isoXY(WORLD_SIZE,WORLD_SIZE,LAYERS*LAYER_HEIGHT) ]; let minX=Infinity,maxX=-Infinity,minY=Infinity,maxY=-Infinity; for(const c of corners){ minX=Math.min(minX,c.ix); maxX=Math.max(maxX,c.ix); minY=Math.min(minY,c.iy); maxY=Math.max(maxY,c.iy); } const width=maxX-minX, height=maxY-minY, pad=0.02, scale=(1-2*pad)*size/Math.max(width,height); const offX=(size-width*scale)/2 - minX*scale; const offY=(size-height*scale)/2 - minY*scale; function drawIsoSeg(ax,ay,al,bx,by,bl,color){ const a=isoXY(ax,ay,al*LAYER_HEIGHT), b=isoXY(bx,by,bl*LAYER_HEIGHT); octx.strokeStyle=color; octx.lineWidth=TRAIL_THICKNESS; octx.beginPath(); octx.moveTo(a.ix*scale+offX, a.iy*scale+offY); octx.lineTo(b.ix*scale+offX, b.iy*scale+offY); octx.stroke(); } for(const b of bots){ const t=b.trail; if(t.length<2) continue; for(let i=1;i<t.length;i++){ const a=t[i-1], c=t[i]; drawIsoSeg(a.x,a.y,a.layer, c.x,c.y,c.layer, b.color); } } const url=off.toDataURL('image/png'); const a=document.createElement('a'); a.href=url; a.download='bot-trails-10k.png'; document.body.appendChild(a); a.click(); a.remove(); }
+
+    // ====== Tests ======
+    const testsBox=document.getElementById('tests');
+    function assert(results,name,cond){ results.push({name, pass:!!cond}); if(!cond) console.error('[TEST FAIL]', name); else console.log('[TEST PASS]', name); }
+    function parseColorPair(val){ const parts=(val||'').split(','); return {g:(parts[0]||'#33FF33').trim(), o:(parts[1]||'#E65C00').trim()}; }
+    function runTests(){ const results=[];
+      assert(results,'LAYERS === 100', LAYERS === 100);
+      const p=worldToScreen(1234,5678,42); assert(results,'worldToScreen finite', Number.isFinite(p.x)&&Number.isFinite(p.y));
+      const expected=['UR','LR','LL','UL','UR','LR','LL','UL'];
+      const got=expected.map((_,i)=>rampCornerForLayer(i).corner);
+      assert(results,'Ramp cycle 0..7 matches', JSON.stringify(expected)===JSON.stringify(got));
+      const opp=c=>c==='UR'?'LL':c==='LR'?'UL':c==='LL'?'UR':'LR';
+      let ok=true; for(let i=0;i<16;i++){ ok=ok&&(stairsCornerForLayer(i).corner===opp(rampCornerForLayer(i).corner)); }
+      assert(results,'Stairs opposite ramp 0..15', ok);
+      let noThrow=true; try{ drawAllWireframes(); }catch(e){ console.error(e); noThrow=false; }
+      assert(results,'drawAllWireframes() runs without error', noThrow);
+      const GRID_OPTIONS_LOCAL=[500,1000,2000,4000,8000];
+      assert(results,'Grid step valid', GRID_OPTIONS_LOCAL.includes(currentGridStep()));
+      const parsed=parseColorPair('#FF0000,#00FF00');
+      assert(results,'parseColorPair returns two hexes', parsed.g==='#FF0000' && parsed.o==='#00FF00');
+      assert(results,'single #view', document.querySelectorAll('#view').length===1);
+      assert(results,'single #ui', document.querySelectorAll('#ui').length===1);
+      assert(results,'single #stats', document.querySelectorAll('#stats').length===1);
+      assert(results,'has #rsOnly', !!document.getElementById('rsOnly'));
+      try{
+        const prevFlag = showRampStairsOnly; const el = document.getElementById('rsOnly'); if(el){ el.checked = true; el.dispatchEvent(new Event('change')); }
+        assert(results,'rsOnly toggle updates flag', showRampStairsOnly === true);
+        assert(results,'rsOnly forces wireframes ON', showWireframe === true);
+        const tl = worldToScreen(0,0,0), tr = worldToScreen(WORLD_SIZE,0,0), br = worldToScreen(WORLD_SIZE,WORLD_SIZE,0), bl = worldToScreen(0,WORLD_SIZE,0);
+        assert(results,'boundary points finite in rsOnly', [tl,tr,br,bl].every(p=>Number.isFinite(p.x)&&Number.isFinite(p.y)));
+        showRampStairsOnly = prevFlag;
+      }catch(e){ assert(results,'rsOnly toggle did not throw', false); }
+      const g0=makeGreen(); const o0=makeOrange();
+      assert(results,'green factory uses GREEN_COLOR', g0.color===GREEN_COLOR);
+      assert(results,'orange factory uses ORANGE_COLOR', o0.color===ORANGE_COLOR);
+      try{ const tb = makeOrange(); tb.layer = 10; const sc=stairsCornerForLayer(tb.layer); tb.x=sc.x; tb.y=sc.y; tb.plan = startStairWind(tb, true); const l0 = tb.layer; updateStairWind(tb, 0.1); assert(results,'stairWind fractional layer', tb.layer>l0 && tb.layer<l0+1); assert(results,'stairWind finite pos', Number.isFinite(tb.x)&&Number.isFinite(tb.y)); }catch(e){ assert(results,'stairWind helpers run', false); }
+      const rcA = rampCornerForLayer(7.9).corner; const rcB = rampCornerForLayer(7).corner; assert(results,'rampCorner floors fractional', rcA === rcB);
+      const scLow = stairsCornerForLayer(-5); const scHigh = stairsCornerForLayer(1000); assert(results,'stairsCorner clamps', !!scLow.corner && !!scHigh.corner);
+      try{ const b = makeOrange(); b.layer = 12.6; b.x = 123; b.y = 456; randomGoal(); const plan = planOrange(b); assert(results,'planOrange returns object', plan && typeof plan === 'object'); } catch(e){ assert(results,'planOrange no-throw fractional', false); }
+      try{ const tb2 = makeOrange(); tb2.layer = 20; const sc2=stairsCornerForLayer(tb2.layer); tb2.x=sc2.x; tb2.y=sc2.y; tb2.plan = startStairWind(tb2, true); const pref = tb2.plan; const ang0 = pref.ang; updateStairWind(tb2, pref.dur/2); const angDelta = Math.abs(tb2.plan.ang - ang0); const twoPi = Math.PI*2; assert(results,'stairWind half-dur ≈ 2π', Math.abs(angDelta - twoPi) < 0.25); }catch(e){ assert(results,'stairWind 2-turns test run', false); }
+      try{ const el = document.getElementById('maxStairLayers'); assert(results,'has #maxStairLayers', !!el); const prev = el.value; el.value = '7'; el.dispatchEvent(new Event('input')); const tb3 = makeOrange(); tb3.layer = 5; const sc3=stairsCornerForLayer(tb3.layer); tb3.x=sc3.x; tb3.y=sc3.y; goal = {x: tb3.x, y: tb3.y, layer: 20}; tb3.plan = startStairWind(tb3, true); assert(results,'layerSpan == 7 with max=7', tb3.plan && tb3.plan.layerSpan === 7); const p3 = tb3.plan; const angStart = p3.ang; updateStairWind(tb3, p3.dur/2); const expectedHalf = p3.startLayer + (p3.layerSpan/2); assert(results,'progress ~ half of span', Math.abs(tb3.layer - expectedHalf) < 0.75); const angDelta3 = Math.abs(tb3.plan.ang - angStart); const expectedAngHalf = Math.PI*2 * p3.layerSpan; assert(results,'angle ~ 2π * span (half dur)', Math.abs(angDelta3 - expectedAngHalf) < Math.PI*0.6); el.value = prev; el.dispatchEvent(new Event('input')); }catch(e){ assert(results,'numeric multi-layer stair wind test run', false); }
+      try{ const b = makeOrange(); const sc=stairsCornerForLayer(b.layer); b.x=sc.x; b.y=sc.y; const pl=startStairWind(b,true); assert(results,'startStairWind returns plan', pl && pl.mode==='stairWind' && Number.isFinite(pl.dur) && pl.layerSpan>=1); assert(results,'not exported globally', !("startStairWind" in window)); }catch(e){ assert(results,'startStairWind basic test run', false); }
+      try{ const l=7; const rc=rampCornerForLayer(l); let pt; switch(rc.corner){ case 'UR': pt={x:WORLD_SIZE-1,y:1}; break; case 'LR': pt={x:WORLD_SIZE-1,y:WORLD_SIZE-1}; break; case 'LL': pt={x:1,y:WORLD_SIZE-1}; break; default: pt={x:1,y:1}; } const gb=makeGreen(); gb.layer=l; gb.x=pt.x; gb.y=pt.y; gb.heading=0; const prevBots=bots.slice(); bots=[gb]; goal={x:pt.x,y:pt.y,layer:l+5}; step(0.016); assert(results,'green climbs +1 when at ramp corner', Math.round(gb.layer)===l+1); bots=prevBots; }catch(e){ assert(results,'green climb test run', false); }
+      try{ const l=12; const rc=rampCornerForLayer(l); const gb2=makeGreen(); gb2.layer=l; gb2.x=100; gb2.y=100; gb2.heading=0; const prevBots2=bots.slice(); bots=[gb2]; goal={x:5000,y:5000,layer:l+3}; step(0); assert(results,'green target set to ramp corner', gb2.target && gb2.target.x===rc.x && gb2.target.y===rc.y); bots=prevBots2; }catch(e){ assert(results,'green target corner test run', false); }
+      assert(results,'single #gAsym', document.querySelectorAll('#gAsym').length===1);
+      try{ const elSk=document.getElementById('gAimSkew'); const prev=elSk.value; elSk.value='30'; elSk.dispatchEvent(new Event('input')); const gb=makeGreen(); gb.layer=10; gb.x=1000; gb.y=1000; gb.heading=0; const prevBots=bots.slice(); bots=[gb]; goal={x:2000,y:1000,layer:10}; const h0=gb.heading; step(0.05); const dh=gb.heading-h0; assert(results,'aim skew induces positive turn', dh>0); bots=prevBots; elSk.value=prev; elSk.dispatchEvent(new Event('input')); }catch(e){ assert(results,'aim skew test run', false); }
+      try{ const elSk=document.getElementById('gAimSkew'); const elBias=document.getElementById('gBias'); const prevSk=elSk.value, prevB=elBias.value; elSk.value='0'; elSk.dispatchEvent(new Event('input')); elBias.value='20'; elBias.dispatchEvent(new Event('input')); const gb=makeGreen(); gb.layer=2; gb.x=1000; gb.y=1000; gb.heading=0; const prevBots=bots.slice(); bots=[gb]; goal={x:2000,y:1000,layer:2}; const h0=gb.heading; step(0.1); const dh=gb.heading-h0; assert(results,'bias drift turns > 0 with +bias', dh>0); bots=prevBots; elBias.value=prevB; elBias.dispatchEvent(new Event('input')); elSk.value=prevSk; elSk.dispatchEvent(new Event('input')); }catch(e){ assert(results,'bias drift test run', false); }
+      try{ const elTw=document.getElementById('gTurnWith'); const elTa=document.getElementById('gTurnAgainst'); const elSk=document.getElementById('gAimSkew'); const pTw=elTw.value, pTa=elTa.value, pSk=elSk.value; elTw.value='1'; elTw.dispatchEvent(new Event('input')); elTa.value='1'; elTa.dispatchEvent(new Event('input')); elSk.value='0'; elSk.dispatchEvent(new Event('input')); const gb=makeGreen(); gb.layer=3; gb.x=1000; gb.y=1000; gb.heading=Math.PI/2; const prevBots=bots.slice(); bots=[gb]; goal={x:2000,y:1000,layer:3}; const h0=gb.heading; step(0.05); const dh1=Math.abs(gb.heading-h0); elTa.value='2.5'; elTa.dispatchEvent(new Event('input')); gb.heading=Math.PI/2; const h1=gb.heading; step(0.05); const dh2=Math.abs(gb.heading-h1); assert(results,'right-turn larger with higher turnAgainst', dh2>dh1); bots=prevBots; elTw.value=pTw; elTw.dispatchEvent(new Event('input')); elTa.value=pTa; elTa.dispatchEvent(new Event('input')); elSk.value=pSk; elSk.dispatchEvent(new Event('input')); }catch(e){ assert(results,'turnAgainst gain test run', false); }
+      try{ const el=document.getElementById('gAsym'); const prev=el.value; el.value='0.40'; el.dispatchEvent(new Event('input')); const gb=makeGreen(); assert(results,'gb.asym equals slider', Math.abs(gb.asym-0.40)<1e-6); el.value=prev; el.dispatchEvent(new Event('input')); }catch(e){ assert(results,'asym slider test run', false); }
+      testsBox.hidden=false; const passed=results.filter(t=>t.pass).length; testsBox.textContent=`Tests: ${passed}/${results.length} passed`; return results; }
+
+    // ====== UI & Loop ======
+    const statsEl=document.getElementById('stats');
+    const toggleWireframe=document.getElementById('toggleWireframe'); let showWireframe=true; toggleWireframe.onchange=e=>{ showWireframe=e.target.checked; };
+    const greenSlider=document.getElementById('greenSlider'); const orangeSlider=document.getElementById('orangeSlider');
+    const greenOut=document.getElementById('greenOut'); const orangeOut=document.getElementById('orangeOut');
+    const thicknessSlider=document.getElementById('thicknessSlider'); const thicknessOut=document.getElementById('thicknessOut');
+    const opacitySlider=document.getElementById('opacitySlider'); const opacityOut=document.getElementById('opacityOut');
+    const speedSlider=document.getElementById('speedSlider'); const speedOut=document.getElementById('speedOut');
+    const gridSlider=document.getElementById('gridSlider'); const gridOut=document.getElementById('gridOut');
+    const wfAlphaSlider=document.getElementById('wfAlphaSlider'); const wfAlphaOut=document.getElementById('wfAlphaOut');
+    const gAsym=document.getElementById('gAsym'); const gAsymOut=document.getElementById('gAsymOut');
+    const gAimSkew=document.getElementById('gAimSkew'); const gAimSkewOut=document.getElementById('gAimSkewOut');
+    const gBias=document.getElementById('gBias'); const gBiasOut=document.getElementById('gBiasOut');
+    const gTurnWith=document.getElementById('gTurnWith'); const gTurnWithOut=document.getElementById('gTurnWithOut');
+    const gTurnAgainst=document.getElementById('gTurnAgainst'); const gTurnAgainstOut=document.getElementById('gTurnAgainstOut');
+    const colorScheme=document.getElementById('colorScheme');
+    const rsOnly=document.getElementById('rsOnly'); let showRampStairsOnly=false;
+    const maxStairLayersEl=document.getElementById('maxStairLayers'); let maxStairLayers=Math.max(1, Math.min(LAYERS, parseInt(maxStairLayersEl.value,10)||1)); maxStairLayersEl.oninput=e=>{ maxStairLayers=Math.max(1, Math.min(LAYERS, parseInt(e.target.value,10)||1)); };
+
+    function focusRampForCurrentLayer(){ const p=rampInnerPoint(cam.layer); if(p){ cam.x=p.x; cam.y=p.y; clampCam(); } }
+    rsOnly.onchange=e=>{ showRampStairsOnly=e.target.checked; if(showRampStairsOnly){ if(!toggleWireframe.checked){ toggleWireframe.checked=true; showWireframe=true; } focusRampForCurrentLayer(); } };
+
+    function syncUI(){
+      greenOut.textContent=greenSlider.value; orangeOut.textContent=orangeSlider.value;
+      thicknessOut.textContent=Number(thicknessSlider.value).toFixed(1);
+      opacityOut.textContent=Number(opacitySlider.value).toFixed(2);
+      speedOut.textContent=Number(speedSlider.value).toFixed(1)+'×';
+      gridOut.textContent=GRID_OPTIONS[gridSlider.value|0];
+      wfAlphaOut.textContent=Number(wfAlphaSlider.value).toFixed(2);
+      gAsymOut.textContent=(parseFloat(gAsym.value)||0).toFixed(2);
+      gAimSkewOut.textContent=((parseFloat(gAimSkew.value)||0)|0)+"°";
+      gBiasOut.textContent=((parseFloat(gBias.value)||0)|0)+"°/s";
+      gTurnWithOut.textContent=(parseFloat(gTurnWith.value)||1).toFixed(1)+'×';
+      gTurnAgainstOut.textContent=(parseFloat(gTurnAgainst.value)||1).toFixed(1)+'×';
+    }
+    function applyUI(){
+      adjustCounts(parseInt(greenSlider.value,10)||0, parseInt(orangeSlider.value,10)||0);
+      TRAIL_THICKNESS=parseFloat(thicknessSlider.value)||1;
+      TRAIL_OPACITY=parseFloat(opacitySlider.value)||0.9;
+      SIM_SPEED=parseFloat(speedSlider.value)||1;
+      gridIndex=gridSlider.value|0;
+      WIREFRAME_ALPHA=parseFloat(wfAlphaSlider.value)||1;
+      G_ASYM = Math.max(0, Math.min(1, parseFloat(gAsym.value)||0.85));
+      G_AIM_SKEW_RAD = (parseFloat(gAimSkew.value)||0) * Math.PI/180;
+      G_BIAS_RAD_PER_S = (parseFloat(gBias.value)||0) * Math.PI/180;
+      G_TURN_WITH = Math.max(0.1, parseFloat(gTurnWith.value)||1);
+      G_TURN_AGAINST = Math.max(0.1, parseFloat(gTurnAgainst.value)||1);
+      for(const b of bots){ if(b.type==='green') b.asym = G_ASYM; }
+    }
+    function applyColorSchemeFromDropdown(){ const parts=(colorScheme && colorScheme.value||'').split(','); GREEN_COLOR=(parts[0]||'#33FF33').trim(); ORANGE_COLOR=(parts[1]||'#E65C00').trim(); for(const b of bots){ if(b.type==='green') b.color=GREEN_COLOR; else if(b.type==='orange') b.color=ORANGE_COLOR; } }
+
+    [greenSlider,orangeSlider,thicknessSlider,opacitySlider,speedSlider,gridSlider,wfAlphaSlider,gAsym,gAimSkew,gBias,gTurnWith,gTurnAgainst].forEach(el=>{
+      el.oninput=()=>{ syncUI(); applyUI(); };
+    });
+    if(colorScheme){ colorScheme.oninput=()=>{ applyColorSchemeFromDropdown(); }; }
+
+    document.getElementById('reset').onclick=()=>{ bots=[]; applyUI(); randomGoal(); };
+    document.getElementById('runTests').onclick=()=>{ const r=runTests(); const passed=r.filter(t=>t.pass).length; statsEl.textContent=`tests ${passed}/${r.length} passed`; };
+    let paused=false; document.getElementById('pause').onclick=()=>{ paused=!paused; document.getElementById('pause').textContent=paused?'Resume':'Pause'; };
+    document.getElementById('export').onclick=()=> exportHighResPNG();
+
+    // Hideable panel (H key)
+    const ui = document.getElementById('ui');
+    let uiCollapsed = false;
+    function setUICollapsed(v){ uiCollapsed=v; ui.classList.toggle('collapsed', uiCollapsed); }
+
+    function loop(now){
+      if(!loop.last) loop.last=now;
+      const dt=Math.min(0.05,(now-loop.last)/1000);
+      loop.last=now;
+      if(!paused){ step(dt); }
+      drawScene();
+      statsEl.textContent=`G:${countType('green')} | O:${countType('orange')} • goal L${goal?goal.layer:'—'} • cam L${cam.layer} • grid ${currentGridStep()} • maxStairs ${maxStairLayers} • zoom ${cam.zoom.toFixed(2)}`;
+      requestAnimationFrame(loop);
+    }
+
+    function init(){ syncUI(); applyUI(); applyColorSchemeFromDropdown(); randomGoal(); requestAnimationFrame(loop); }
+    init();
+
+  })();
+  </script>
+</body>
+</html>
