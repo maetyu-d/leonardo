@@ -5,136 +5,65 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>limp.freq</title>
 <style>
-  :root { --bg:#eaeaea; --fg:#000; --border:#000; --gutter:140px; }
+  :root { --bg:#eaeaea; --fg:#000; --border:#000; }
 
-  /* Base */
   html, body { height:100%; }
   * { box-sizing:border-box; }
-  body {
-    margin:0;
-    background:var(--bg);
-    color:var(--fg);
-    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  body{
+    margin:0; background:var(--bg); color:var(--fg);
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono","Courier New", monospace;
     line-height:1.55;
   }
 
-  /* Page frame */
+  /* Frame */
   .page{
-    max-width: 1200px;
-    margin:16px auto;
-    border:4px solid var(--border);
-    background:var(--bg);
-    padding:24px;
-    padding-right: calc(var(--gutter) + 24px); /* reserve space for conveyor */
+    max-width:1200px; margin:16px auto; background:var(--bg);
+    border:4px solid var(--border); padding:24px;
   }
 
   /* Header */
   .top{
-    display:flex;
-    gap:16px;
-    align-items:flex-end;
-    flex-wrap:wrap;
-    margin-bottom:14px;
+    display:grid;
+    grid-template-columns: 1fr auto;
+    align-items:end; gap:16px; margin-bottom:14px;
   }
   h1{
-    margin:0;
-    font-size: clamp(28px, 6vw, 64px);
-    text-transform: uppercase;
-    letter-spacing: 1px;
-    line-height: 1;
-    padding-bottom:6px;
-    border-bottom:3px solid var(--border);
+    margin:0; font-size:clamp(28px,6vw,64px);
+    text-transform:uppercase; letter-spacing:1px; line-height:1;
+    padding-bottom:6px; border-bottom:3px solid var(--border);
   }
   .home a{
-    display:inline-block;
-    padding:6px 10px;
-    border:2px solid var(--border);
-    background:#fff;
-    text-decoration:none;
-    color:inherit;
-    font-weight:800;
-    text-transform:uppercase;
+    display:inline-block; padding:8px 12px; border:2px solid var(--border); background:#fff;
+    text-decoration:none; color:inherit; font-weight:800; text-transform:uppercase;
   }
-  .home a:hover, .home a:focus { background:#000; color:#fff; }
+  .home a:hover,.home a:focus{ background:#000; color:#fff; }
 
-  /* Intro text */
-  .description{
-    max-width: 72ch; /* stable line length */
-    margin: 0 0 28px 0;
-    text-align: justify;
-  }
+  /* Intro */
+  .description{ max-width:72ch; margin:0 0 28px 0; text-align:justify; }
 
-  /* Sections grid */
-  .grid{
-    display:grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 32px 48px;
+  /* Three columns */
+  .cols{
+    display:grid; grid-template-columns: repeat(3, minmax(220px, 1fr));
+    gap:32px;
   }
-  @media (max-width: 860px){
-    .grid{ grid-template-columns: 1fr; }
-  }
+  @media (max-width: 860px){ .cols{ grid-template-columns:1fr; } }
 
   .block h2{
-    margin:0 0 10px 0;
-    display:inline-block;
-    padding:4px 8px;
-    background:#fff;
-    text-transform:uppercase;
-    border-top:2px solid var(--border);
-    border-bottom:2px solid var(--border);
+    margin:0 0 10px 0; display:inline-block; padding:4px 8px; background:#fff;
+    text-transform:uppercase; border-top:2px solid var(--border); border-bottom:2px solid var(--border);
   }
-
   ul{ list-style:none; padding:0; margin:0; }
   li{ margin:10px 0; }
 
   a.btn{
-    color:var(--fg);
-    text-decoration:none;
-    background:#fff;
-    padding:6px 10px;
-    border:2px solid var(--border);
-    display:inline-block;
-    min-width: 180px;
-    text-align: left;
+    color:var(--fg); text-decoration:none; background:#fff;
+    padding:6px 10px; border:2px solid var(--border); display:inline-block; min-width: 180px; text-align:left;
   }
-  a.btn:hover, a.btn:focus{ background:#000; color:#fff; }
+  a.btn:hover,a.btn:focus{ background:#000; color:#fff; }
 
-  /* Footer */
   footer{
-    margin-top:40px;
-    padding-top:12px;
-    border-top:3px solid var(--border);
-    font-size:14px;
-    text-transform:uppercase;
-  }
-
-  /* ===== Right-edge vertical conveyor ===== */
-  .conveyor-wrap{
-    position: fixed;
-    right: 16px;
-    top: 16px;
-    bottom: 16px;
-    width: var(--gutter);
-    display:flex;
-    justify-content:flex-end;
-    align-items:center;
-    pointer-events:none;  /* don’t block clicks */
-    z-index: 10;
-  }
-  .conveyor{ height:100%; width:120px; display:block; }
-  .belt{ fill:#222; }
-  .roller{ fill:#111; }
-  .machine{ fill:#eaeaea; stroke:#000; stroke-width:6; }
-  .window{ fill:#c0e7ff; stroke:#000; stroke-width:6; }
-  .gear{ fill:#000; transform-origin:center; animation:spin 4s linear infinite; }
-  .gear.slow{ animation-duration:7s; }
-  @keyframes spin{ to{ transform:rotate(360deg); } }
-  .item rect{ fill:#d4af37; stroke:#000; stroke-width:2; }
-  .item text{ font-size:32px; }
-
-  /* Reduced motion */
-  @media (prefers-reduced-motion: reduce){
-    .gear{ animation:none; }
+    margin-top:40px; padding-top:12px; border-top:3px solid var(--border);
+    font-size:14px; text-transform:uppercase;
   }
 </style>
 </head>
@@ -149,7 +78,7 @@
       limp.freq uses populations of self-navigating, cybernetics-inspired bots to explore how localised locomotion asymmetries—such as the artist’s own leg length discrepancy (LLD)—can have cascading effect on spatial use and navigation. By foregrounding the richness and alternative experiences of imperfection, the bots propose a more pluralistic spatial logic, but also an alternate history of AI, grounded in the potentials of difference.
     </p>
 
-    <main class="grid">
+    <main class="cols">
       <section class="block">
         <h2>Simulators</h2>
         <ul>
@@ -177,121 +106,8 @@
       </section>
     </main>
 
-    <footer>© LIMP.FREQ — MINIMAL SYSTEMS FOR UNSTABLE BODIES</footer>
+    <footer>© Mat Dalgleish 2025</footer>
   </div>
-
-  <!-- Vertical shit→gold conveyor (fixed gutter on right) -->
-  <div class="conveyor-wrap" aria-hidden="true">
-    <svg class="conveyor" viewBox="0 0 260 1200" role="img" aria-label="A vertical conveyor turns waste into gold bars">
-      <!-- vertical belt -->
-      <rect class="belt" x="110" y="0" width="40" height="1200" rx="4"/>
-      <line x1="130" y1="0" x2="130" y2="1200" stroke="#fff" stroke-width="6" stroke-dasharray="20 16"/>
-      <!-- rollers -->
-      <circle class="roller" cx="130" cy="100" r="18"/>
-      <circle class="roller" cx="130" cy="400" r="18"/>
-      <circle class="roller" cx="130" cy="700" r="18"/>
-      <circle class="roller" cx="130" cy="1000" r="18"/>
-      <!-- machine -->
-      <g id="machine" transform="translate(50,520)">
-        <rect class="machine" x="0" y="0" width="160" height="160" rx="8"/>
-        <rect x="0" y="0" width="160" height="26" fill="#ffeb3b" stroke="#000" stroke-width="6"/>
-        <rect class="window" x="18" y="44" width="124" height="64" rx="4"/>
-        <g transform="translate(80,76)">
-          <g class="gear slow">
-            <circle r="18"/>
-            <g>
-              <rect x="-2" y="-30" width="4" height="10"/>
-              <rect x="-2" y="20" width="4" height="10"/>
-              <rect x="20" y="-2" width="10" height="4"/>
-              <rect x="-30" y="-2" width="10" height="4"/>
-            </g>
-          </g>
-        </g>
-      </g>
-      <g id="items"></g>
-    </svg>
-  </div>
-
-  <script>
-    // Vertical conveyor animation (💩 → gold bars)
-    (function() {
-      const SVG_NS = "http://www.w3.org/2000/svg";
-      const root = document.getElementById("items");
-      if (!root) return;
-
-      const height = 1200;
-      const laneX = 130;
-      const speed = 1;               // tweak speed
-      const count = 10;              // number of items
-      const spacing = height / count;
-      const items = [];
-
-      const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-
-      // machine conversion zone
-      const machineY = 520;
-      const machineH = 160;
-      const convertZoneStart = machineY - 8;
-      const convertZoneEnd   = machineY + machineH + 8;
-
-      function makeItem(i) {
-        const g = document.createElementNS(SVG_NS, "g");
-        g.setAttribute("class", "item");
-        const t = document.createElementNS(SVG_NS, "text");
-        t.textContent = "💩";
-        t.setAttribute("text-anchor", "middle");
-        t.setAttribute("dominant-baseline", "middle");
-        g.appendChild(t);
-        root.appendChild(g);
-        const y0 = height + i * spacing; // start below
-        return { g, y: y0, x: laneX, state: "poop" };
-      }
-
-      function draw(it) {
-        while (it.g.firstChild) it.g.removeChild(it.g.firstChild);
-        if (it.state === "gold") {
-          for (let i = 0; i < 3; i++) {
-            const bar = document.createElementNS(SVG_NS, "rect");
-            bar.setAttribute("x", -14);
-            bar.setAttribute("y", -6 - i * 6);
-            bar.setAttribute("width", 28);
-            bar.setAttribute("height", 6);
-            it.g.appendChild(bar);
-          }
-        } else {
-          const t = document.createElementNS(SVG_NS, "text");
-          t.textContent = "💩";
-          t.setAttribute("text-anchor", "middle");
-          t.setAttribute("dominant-baseline", "middle");
-          it.g.appendChild(t);
-        }
-        it.g.setAttribute("transform", `translate(${it.x}, ${it.y})`);
-      }
-
-      for (let i = 0; i < count; i++) items.push(makeItem(i));
-
-      function step() {
-        for (const it of items) {
-          it.y -= speed;
-
-          if (it.state === "poop" && it.y < convertZoneEnd && it.y > convertZoneStart) {
-            it.state = "gold";
-          }
-
-          if (it.y < -40) {
-            it.y = height + spacing;
-            it.state = "poop";
-          }
-
-          draw(it);
-        }
-        if (!reduceMotion) requestAnimationFrame(step);
-      }
-
-      for (const it of items) draw(it);
-      if (!reduceMotion) requestAnimationFrame(step);
-    })();
-  </script>
 </body>
 </html>
 
