@@ -5,104 +5,182 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>limp.freq</title>
 <style>
-  :root { --bg:#eaeaea; --fg:#000; --border:#000; }
+  :root { --bg:#eaeaea; --fg:#000; --border:#000; --gutter:140px; }
 
+  /* Base */
   html, body { height:100%; }
-  body{
-    margin:20px; border:4px solid var(--border);
-    background:var(--bg); color:var(--fg);
-    font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono","Courier New", monospace;
-    font-size:18px; line-height:1.6; position:relative; overflow-x:hidden;
+  * { box-sizing:border-box; }
+  body {
+    margin:0;
+    background:var(--bg);
+    color:var(--fg);
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    line-height:1.55;
   }
 
-  .topline{display:flex; align-items:flex-end; gap:16px; flex-wrap:wrap;}
+  /* Page frame */
+  .page{
+    max-width: 1200px;
+    margin:16px auto;
+    border:4px solid var(--border);
+    background:var(--bg);
+    padding:24px;
+    padding-right: calc(var(--gutter) + 24px); /* reserve space for conveyor */
+  }
+
+  /* Header */
+  .top{
+    display:flex;
+    gap:16px;
+    align-items:flex-end;
+    flex-wrap:wrap;
+    margin-bottom:14px;
+  }
   h1{
-    font-size:56px; text-transform:uppercase;
-    border-bottom:3px solid var(--border); margin:0 0 10px 0; padding-bottom:5px;
+    margin:0;
+    font-size: clamp(28px, 6vw, 64px);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    line-height: 1;
+    padding-bottom:6px;
+    border-bottom:3px solid var(--border);
   }
   .home a{
-    display:inline-block; padding:4px 8px; border:2px solid var(--border); background:#fff;
-    text-decoration:none; color:var(--fg); font-weight:800; text-transform:uppercase;
+    display:inline-block;
+    padding:6px 10px;
+    border:2px solid var(--border);
+    background:#fff;
+    text-decoration:none;
+    color:inherit;
+    font-weight:800;
+    text-transform:uppercase;
   }
-  .home a:hover,.home a:focus{background:#000; color:#fff;}
+  .home a:hover, .home a:focus { background:#000; color:#fff; }
 
-  p.description{max-width:850px; margin:0 0 40px 0; text-align:justify;}
-
-  h2{
-    text-transform:uppercase; border-top:2px solid var(--border); border-bottom:2px solid var(--border);
-    padding:5px 0; margin:30px 0 10px 0; display:inline-block; background:#fff;
+  /* Intro text */
+  .description{
+    max-width: 72ch; /* stable line length */
+    margin: 0 0 28px 0;
+    text-align: justify;
   }
-  ul{list-style:none; padding:0; margin:0 0 30px 10px;}
-  li{margin:8px 0;}
-  a{color:var(--fg); text-decoration:none; background:#fff; padding:2px 6px; border:2px solid var(--border); display:inline-block;}
-  a:hover, a:focus{background:#000; color:#fff;}
 
-  footer{border-top:3px solid var(--border); margin-top:60px; padding-top:10px; font-size:14px; text-transform:uppercase;}
+  /* Sections grid */
+  .grid{
+    display:grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 32px 48px;
+  }
+  @media (max-width: 860px){
+    .grid{ grid-template-columns: 1fr; }
+  }
 
-  /* Intentional brutalist misalignments */
-  .section:nth-of-type(2){ margin-left:30px; }
-  .section:nth-of-type(3){ margin-left:60px; }
+  .block h2{
+    margin:0 0 10px 0;
+    display:inline-block;
+    padding:4px 8px;
+    background:#fff;
+    text-transform:uppercase;
+    border-top:2px solid var(--border);
+    border-bottom:2px solid var(--border);
+  }
 
-  /* Right-edge vertical conveyor */
+  ul{ list-style:none; padding:0; margin:0; }
+  li{ margin:10px 0; }
+
+  a.btn{
+    color:var(--fg);
+    text-decoration:none;
+    background:#fff;
+    padding:6px 10px;
+    border:2px solid var(--border);
+    display:inline-block;
+    min-width: 180px;
+    text-align: left;
+  }
+  a.btn:hover, a.btn:focus{ background:#000; color:#fff; }
+
+  /* Footer */
+  footer{
+    margin-top:40px;
+    padding-top:12px;
+    border-top:3px solid var(--border);
+    font-size:14px;
+    text-transform:uppercase;
+  }
+
+  /* ===== Right-edge vertical conveyor ===== */
   .conveyor-wrap{
-    position:fixed; right:6px; bottom:8px; top:8px; width:120px;
-    pointer-events:none; z-index:10; display:flex; align-items:center; justify-content:flex-end;
+    position: fixed;
+    right: 16px;
+    top: 16px;
+    bottom: 16px;
+    width: var(--gutter);
+    display:flex;
+    justify-content:flex-end;
+    align-items:center;
+    pointer-events:none;  /* don’t block clicks */
+    z-index: 10;
   }
-  .conveyor{height:100%; width:120px; display:block;}
-  .belt{fill:#222;} .roller{fill:#111;}
-  .machine{fill:#eaeaea; stroke:#000; stroke-width:6;}
-  .window{fill:#c0e7ff; stroke:#000; stroke-width:6;}
-  .gear{fill:#000; transform-origin:center; animation:spin 4s linear infinite;}
-  .gear.slow{animation-duration:7s;}
-  @keyframes spin{to{transform:rotate(360deg);}}
-  .item rect{fill:#d4af37; stroke:#000; stroke-width:2;}
-  .item text{font-size:32px;}
+  .conveyor{ height:100%; width:120px; display:block; }
+  .belt{ fill:#222; }
+  .roller{ fill:#111; }
+  .machine{ fill:#eaeaea; stroke:#000; stroke-width:6; }
+  .window{ fill:#c0e7ff; stroke:#000; stroke-width:6; }
+  .gear{ fill:#000; transform-origin:center; animation:spin 4s linear infinite; }
+  .gear.slow{ animation-duration:7s; }
+  @keyframes spin{ to{ transform:rotate(360deg); } }
+  .item rect{ fill:#d4af37; stroke:#000; stroke-width:2; }
+  .item text{ font-size:32px; }
 
-  @media (prefers-reduced-motion: reduce){ .gear{animation:none;} }
-  @media (max-width:640px){ body{ margin-right:140px; } }
+  /* Reduced motion */
+  @media (prefers-reduced-motion: reduce){
+    .gear{ animation:none; }
+  }
 </style>
 </head>
 <body>
-  <div class="topline">
-    <h1>limp.freq</h1>
-    <div class="home"><a href="./">home</a></div>
+  <div class="page">
+    <header class="top">
+      <h1>limp.freq</h1>
+      <div class="home"><a href="./">home</a></div>
+    </header>
+
+    <p class="description">
+      limp.freq uses populations of self-navigating, cybernetics-inspired bots to explore how localised locomotion asymmetries—such as the artist’s own leg length discrepancy (LLD)—can have cascading effect on spatial use and navigation. By foregrounding the richness and alternative experiences of imperfection, the bots propose a more pluralistic spatial logic, but also an alternate history of AI, grounded in the potentials of difference.
+    </p>
+
+    <main class="grid">
+      <section class="block">
+        <h2>Simulators</h2>
+        <ul>
+          <li><a class="btn" href="simulator1.html">SIMULATOR 1</a></li>
+          <li><a class="btn" href="simulator2.html">SIMULATOR 2</a></li>
+          <li><a class="btn" href="simulator3.html">SIMULATOR 3</a></li>
+          <li><a class="btn" href="simulator4.html">SIMULATOR 4</a></li>
+        </ul>
+      </section>
+
+      <section class="block">
+        <h2>Tutorials</h2>
+        <ul>
+          <li><a class="btn" href="tutorial1.html">TUTORIAL 1</a></li>
+          <li><a class="btn" href="tutorial2.html">TUTORIAL 2</a></li>
+          <li><a class="btn" href="tutorial3.html">TUTORIAL 3</a></li>
+        </ul>
+      </section>
+
+      <section class="block">
+        <h2>Playlist</h2>
+        <ul>
+          <li><a class="btn" href="https://www.youtube.com/playlist?list=PLmSjnjrO5QlcxJArNNmovidaAXVEAicBl" target="_blank" rel="noopener">YOUTUBE PLAYLIST</a></li>
+        </ul>
+      </section>
+    </main>
+
+    <footer>© LIMP.FREQ — MINIMAL SYSTEMS FOR UNSTABLE BODIES</footer>
   </div>
 
-  <p class="description">
-    limp.freq uses populations of self-navigating, cybernetics-inspired bots to explore how localised locomotion asymmetries—such as the artist’s own leg length discrepancy (LLD)—can have cascading effect on spatial use and navigation. By foregrounding the richness and alternative experiences of imperfection, the bots propose a more pluralistic spatial logic, but also an alternate history of AI, grounded in the potentials of difference.
-  </p>
-
-  <div class="section">
-    <h2>Simulators</h2>
-    <ul>
-      <li><a href="simulator1.html">SIMULATOR 1</a></li>
-      <li><a href="simulator2.html">SIMULATOR 2</a></li>
-      <li><a href="simulator3.html">SIMULATOR 3</a></li>
-      <li><a href="simulator4.html">SIMULATOR 4</a></li>
-    </ul>
-  </div>
-
-  <div class="section">
-    <h2>Tutorials</h2>
-    <ul>
-      <li><a href="tutorial1.html">TUTORIAL 1</a></li>
-      <li><a href="tutorial2.html">TUTORIAL 2</a></li>
-      <li><a href="tutorial3.html">TUTORIAL 3</a></li>
-    </ul>
-  </div>
-
-  <div class="section">
-    <h2>Playlist</h2>
-    <ul>
-      <li><a href="https://www.youtube.com/playlist?list=PLmSjnjrO5QlcxJArNNmovidaAXVEAicBl" target="_blank" rel="noopener">YOUTUBE</a></li>
-    </ul>
-  </div>
-
-  <footer>
-    © LIMP.FREQ — MINIMAL SYSTEMS FOR UNSTABLE BODIES
-  </footer>
-
-  <!-- Vertical shit→gold conveyor (SVG) -->
+  <!-- Vertical shit→gold conveyor (fixed gutter on right) -->
   <div class="conveyor-wrap" aria-hidden="true">
     <svg class="conveyor" viewBox="0 0 260 1200" role="img" aria-label="A vertical conveyor turns waste into gold bars">
       <!-- vertical belt -->
@@ -143,8 +221,8 @@
 
       const height = 1200;
       const laneX = 130;
-      const speed = 1;                 // px per frame; tweak if you want faster/slower
-      const count = 10;                // number of items on the belt
+      const speed = 1;               // tweak speed
+      const count = 10;              // number of items
       const spacing = height / count;
       const items = [];
 
@@ -165,7 +243,7 @@
         t.setAttribute("dominant-baseline", "middle");
         g.appendChild(t);
         root.appendChild(g);
-        const y0 = height + i * spacing; // start just below viewport
+        const y0 = height + i * spacing; // start below
         return { g, y: y0, x: laneX, state: "poop" };
       }
 
@@ -196,16 +274,15 @@
         for (const it of items) {
           it.y -= speed;
 
-          // convert while passing through the machine window
           if (it.state === "poop" && it.y < convertZoneEnd && it.y > convertZoneStart) {
             it.state = "gold";
           }
 
-          // recycle when off the top
           if (it.y < -40) {
             it.y = height + spacing;
             it.state = "poop";
           }
+
           draw(it);
         }
         if (!reduceMotion) requestAnimationFrame(step);
@@ -217,3 +294,4 @@
   </script>
 </body>
 </html>
+
