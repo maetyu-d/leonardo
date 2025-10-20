@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>limp.freq</title>
+<style>
+  :root { --bg:#eaeaea; --fg:#000; --border:#000; }
+
+  html, body { height:100%; }
+  body{
+    margin:20px; border:4px solid var(--border);
+    background:var(--bg); color:var(--fg);
+    font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono","Courier New", monospace;
+    font-size:18px; line-height:1.6; position:relative; overflow-x:hidden;
+  }
+
+  .topline{display:flex; align-items:flex-end; gap:16px; flex-wrap:wrap;}
+  h1{
+    font-size:56px; text-transform:uppercase;
+    border-bottom:3px solid var(--border); margin:0 0 10px 0; padding-bottom:5px;
+  }
+  .home a{
+    display:inline-block; padding:4px 8px; border:2px solid var(--border); background:#fff;
+    text-decoration:none; color:var(--fg); font-weight:800; text-transform:uppercase;
+  }
+  .home a:hover,.home a:focus{background:#000; color:#fff;}
+
+  p.description{max-width:850px; margin:0 0 40px 0; text-align:justify;}
+
+  h2{
+    text-transform:uppercase; border-top:2px solid var(--border); border-bottom:2px solid var(--border);
+    padding:5px 0; margin:30px 0 10px 0; display:inline-block; background:#fff;
+  }
+  ul{list-style:none; padding:0; margin:0 0 30px 10px;}
+  li{margin:8px 0;}
+  a{color:var(--fg); text-decoration:none; background:#fff; padding:2px 6px; border:2px solid var(--border); display:inline-block;}
+  a:hover, a:focus{background:#000; color:#fff;}
+
+  footer{border-top:3px solid var(--border); margin-top:60px; padding-top:10px; font-size:14px; text-transform:uppercase;}
+
+  /* Intentional brutalist misalignments */
+  .section:nth-of-type(2){ margin-left:30px; }
+  .section:nth-of-type(3){ margin-left:60px; }
+
+  /* Right-edge vertical conveyor */
+  .conveyor-wrap{
+    position:fixed; right:6px; bottom:8px; top:8px; width:120px;
+    pointer-events:none; z-index:10; display:flex; align-items:center; justify-content:flex-end;
+  }
+  .conveyor{height:100%; width:120px; display:block;}
+  .belt{fill:#222;} .roller{fill:#111;}
+  .machine{fill:#eaeaea; stroke:#000; stroke-width:6;}
+  .window{fill:#c0e7ff; stroke:#000; stroke-width:6;}
+  .gear{fill:#000; transform-origin:center; animation:spin 4s linear infinite;}
+  .gear.slow{animation-duration:7s;}
+  @keyframes spin{to{transform:rotate(360deg);}}
+  .item rect{fill:#d4af37; stroke:#000; stroke-width:2;}
+  .item text{font-size:32px;}
+
+  @media (prefers-reduced-motion: reduce){ .gear{animation:none;} }
+  @media (max-width:640px){ body{ margin-right:140px; } }
+</style>
+</head>
+<body>
+  <div class="topline">
+    <h1>limp.freq</h1>
+    <div class="home"><a href="./">home</a></div>
+  </div>
+
+  <p class="description">
+    limp.freq uses populations of self-navigating, cybernetics-inspired bots to explore how localised locomotion asymmetries—such as the artist’s own leg length discrepancy (LLD)—can have cascading effect on spatial use and navigation. By foregrounding the richness and alternative experiences of imperfection, the bots propose a more pluralistic spatial logic, but also an alternate history of AI, grounded in the potentials of difference.
+  </p>
+
+  <div class="section">
+    <h2>Simulators</h2>
+    <ul>
+      <li><a href="simulator1.html">SIMULATOR 1</a></li>
+      <li><a href="simulator2.html">SIMULATOR 2</a></li>
+      <li><a href="simulator3.html">SIMULATOR 3</a></li>
+      <li><a href="simulator4.html">SIMULATOR 4</a></li>
+    </ul>
+  </div>
+
+  <div class="section">
+    <h2>Tutorials</h2>
+    <ul>
+      <li><a href="tutorial1.html">TUTORIAL 1</a></li>
+      <li><a href="tutorial2.html">TUTORIAL 2</a></li>
+      <li><a href="tutorial3.html">TUTORIAL 3</a></li>
+    </ul>
+  </div>
+
+  <div class="section">
+    <h2>Playlist</h2>
+    <ul>
+      <li><a href="https://www.youtube.com/playlist?list=PLmSjnjrO5QlcxJArNNmovidaAXVEAicBl" target="_blank" rel="noopener">YOUTUBE</a></li>
+    </ul>
+  </div>
+
+  <footer>
+    © LIMP.FREQ — MINIMAL SYSTEMS FOR UNSTABLE BODIES
+  </footer>
+
+  <!-- Vertical shit→gold conveyor (SVG) -->
+  <div class="conveyor-wrap" aria-hidden="true">
+    <svg class="conveyor" viewBox="0 0 260 1200" role="img" aria-label="A vertical conveyor turns waste into gold bars">
+      <!-- vertical belt -->
+      <rect class="belt" x="110" y="0" width="40" height="1200" rx="4"/>
+      <line x1="130" y1="0" x2="130" y2="1200" stroke="#fff" stroke-width="6" stroke-dasharray="20 16"/>
+      <!-- rollers -->
+      <circle class="roller" cx="130" cy="100" r="18"/>
+      <circle class="roller" cx="130" cy="400" r="18"/>
+      <circle class="roller" cx="130" cy="700" r="18"/>
+      <circle class="roller" cx="130" cy="1000" r="18"/>
+      <!-- machine -->
+      <g id="machine" transform="translate(50,520)">
+        <rect class="machine" x="0" y="0" width="160" height="160" rx="8"/>
+        <rect x="0" y="0" width="160" height="26" fill="#ffeb3b" stroke="#000" stroke-width="6"/>
+        <rect class="window" x="18" y="44" width="124" height="64" rx="4"/>
+        <g transform="translate(80,76)">
+          <g class="gear slow">
+            <circle r="18"/>
+            <g>
+              <rect x="-2" y="-30" width="4" height="10"/>
+              <rect x="-2" y="20" width="4" height="10"/>
+              <rect x="20" y="-2" width="10" height="4"/>
+              <rect x="-30" y="-2" width="10" height="4"/>
+            </g>
+          </g>
+        </g>
+      </g>
+      <g id="items"></g>
+    </svg>
+  </div>
+
+  <script>
+    // Vertical conveyor animation (💩 → gold bars)
+    (function() {
+      const SVG_NS = "http://www.w3.org/2000/svg";
+      const root = document.getElementById("items");
+      if (!root) return;
+
+      const height = 1200;
+      const laneX = 130;
+      const speed = 1;                 // px per frame; tweak if you want faster/slower
+      const count = 10;                // number of items on the belt
+      const spacing = height / count;
+      const items = [];
+
+      const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+      // machine conversion zone
+      const machineY = 520;
+      const machineH = 160;
+      const convertZoneStart = machineY - 8;
+      const convertZoneEnd   = machineY + machineH + 8;
+
+      function makeItem(i) {
+        const g = document.createElementNS(SVG_NS, "g");
+        g.setAttribute("class", "item");
+        const t = document.createElementNS(SVG_NS, "text");
+        t.textContent = "💩";
+        t.setAttribute("text-anchor", "middle");
+        t.setAttribute("dominant-baseline", "middle");
+        g.appendChild(t);
+        root.appendChild(g);
+        const y0 = height + i * spacing; // start just below viewport
+        return { g, y: y0, x: laneX, state: "poop" };
+      }
+
+      function draw(it) {
+        while (it.g.firstChild) it.g.removeChild(it.g.firstChild);
+        if (it.state === "gold") {
+          for (let i = 0; i < 3; i++) {
+            const bar = document.createElementNS(SVG_NS, "rect");
+            bar.setAttribute("x", -14);
+            bar.setAttribute("y", -6 - i * 6);
+            bar.setAttribute("width", 28);
+            bar.setAttribute("height", 6);
+            it.g.appendChild(bar);
+          }
+        } else {
+          const t = document.createElementNS(SVG_NS, "text");
+          t.textContent = "💩";
+          t.setAttribute("text-anchor", "middle");
+          t.setAttribute("dominant-baseline", "middle");
+          it.g.appendChild(t);
+        }
+        it.g.setAttribute("transform", `translate(${it.x}, ${it.y})`);
+      }
+
+      for (let i = 0; i < count; i++) items.push(makeItem(i));
+
+      function step() {
+        for (const it of items) {
+          it.y -= speed;
+
+          // convert while passing through the machine window
+          if (it.state === "poop" && it.y < convertZoneEnd && it.y > convertZoneStart) {
+            it.state = "gold";
+          }
+
+          // recycle when off the top
+          if (it.y < -40) {
+            it.y = height + spacing;
+            it.state = "poop";
+          }
+          draw(it);
+        }
+        if (!reduceMotion) requestAnimationFrame(step);
+      }
+
+      for (const it of items) draw(it);
+      if (!reduceMotion) requestAnimationFrame(step);
+    })();
+  </script>
+</body>
+</html>
