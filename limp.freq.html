@@ -15,7 +15,6 @@
     line-height:1.55;
   }
 
-  /* Frame */
   .page{
     max-width:1200px; margin:16px auto; background:var(--bg);
     border:4px solid var(--border); padding:24px;
@@ -23,8 +22,7 @@
 
   /* Header */
   .top{
-    display:grid;
-    grid-template-columns: 1fr auto;
+    display:grid; grid-template-columns: 1fr auto;
     align-items:end; gap:16px; margin-bottom:14px;
   }
   h1{
@@ -33,17 +31,44 @@
     padding-bottom:6px; border-bottom:3px solid var(--border);
   }
   .home a{
-    display:inline-block; padding:8px 12px; border:2px solid var(--border); background:#fff;
-    text-decoration:none; color:inherit; font-weight:800; text-transform:uppercase;
+    display:inline-block; padding:8px 12px; border:2px solid var(--border);
+    background:#fff; text-decoration:none; color:inherit;
+    font-weight:800; text-transform:uppercase;
   }
   .home a:hover,.home a:focus{ background:#000; color:#fff; }
 
-  /* Intro */
-  .description{ max-width:72ch; margin:0 0 28px 0; text-align:justify; }
+  /* Project description with image beside it */
+  .intro {
+    display:grid;
+    grid-template-columns: 1fr 360px;
+    gap: 24px;
+    align-items:start;
+    margin-bottom: 36px;
+  }
+  @media (max-width:900px){
+    .intro{ grid-template-columns:1fr; }
+  }
 
-  /* Three columns */
+  .description{
+    text-align:justify;
+    margin:0;
+  }
+
+  .image-box{
+    border:3px solid var(--border);
+    background:#fff;
+    padding:4px;
+  }
+  .image-box img{
+    width:100%;
+    height:auto;
+    display:block;
+  }
+
+  /* Three columns for links */
   .cols{
-    display:grid; grid-template-columns: repeat(3, minmax(220px, 1fr));
+    display:grid;
+    grid-template-columns: repeat(3, minmax(220px, 1fr));
     gap:32px;
   }
   @media (max-width: 860px){ .cols{ grid-template-columns:1fr; } }
@@ -74,9 +99,14 @@
       <div class="home"><a href="./">home</a></div>
     </header>
 
-    <p class="description">
-      limp.freq uses populations of self-navigating, cybernetics-inspired bots to explore how localised locomotion asymmetries—such as the artist’s own leg length discrepancy (LLD)—can have cascading effect on spatial use and navigation. By foregrounding the richness and alternative experiences of imperfection, the bots propose a more pluralistic spatial logic, but also an alternate history of AI, grounded in the potentials of difference. The project emphasises interactive play over passive depiction and thus it's recommended that you try it out by clicking the Simuilation links below (an optional tutorial is also provided).
-    </p>
+    <section class="intro">
+      <p class="description">
+        limp.freq uses populations of self-navigating, cybernetics-inspired bots to explore how localised locomotion asymmetries—such as the artist’s own leg length discrepancy (LLD)—can have cascading effect on spatial use and navigation. By foregrounding the richness and alternative experiences of imperfection, the bots propose a more pluralistic spatial logic, but also an alternate history of AI, grounded in the potentials of difference.
+      </p>
+      <div class="image-box">
+        <img src="lld1.jpg" alt="limp.freq project image">
+      </div>
+    </section>
 
     <main class="cols">
       <section class="block">
@@ -110,5 +140,3 @@
   </div>
 </body>
 </html>
-
-
